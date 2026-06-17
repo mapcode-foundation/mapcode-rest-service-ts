@@ -29,7 +29,8 @@ function fieldJson(value: unknown, field: Field): string | null {
     case "object": return objectJson(value as Record<string, unknown>, field.type.schema);
     case "stringList":
       return `[${(value as string[]).map((s) => JSON.stringify(s)).join(",")}]`;
-    case "objectList": {
+    case "objectList":
+    case "objectListUnwrapped": {
       const schema = field.type.schema;
       return `[${(value as Record<string, unknown>[]).map((o) => objectJson(o, schema)).join(",")}]`;
     }

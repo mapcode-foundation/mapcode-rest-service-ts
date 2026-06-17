@@ -54,12 +54,7 @@ describe("AlphabetDTO", () => {
 });
 
 // ---------------------------------------------------------------------------
-// AlphabetsDTO — JSON only
-// NOTE: AlphabetsDTO XML uses JAXB @XmlElement without @XmlElementWrapper,
-// emitting alphabet items directly inside the root <alphabets> alongside <total>.
-// The current serializer objectList always wraps items in a container element;
-// it cannot emit items directly at root level. The XML format for this DTO
-// requires a new serializer capability (SERIALIZER GAP: unwrapped objectList).
+// AlphabetsDTO — JSON + XML (objectListUnwrapped)
 // ---------------------------------------------------------------------------
 
 describe("AlphabetsDTO", () => {
@@ -87,6 +82,16 @@ describe("AlphabetsDTO", () => {
     });
     expect(toJson(a, dto.alphabetsSchema)).toBe(
       '{"total":28,"alphabets":[{"name":"ROMAN"},{"name":"GREEK"}]}',
+    );
+  });
+
+  it("XML count=2 — ApiAlphabetsTest.checkAlphabetsCountXml (ROMAN, GREEK)", () => {
+    const a = dto.buildAlphabets({
+      total: 28,
+      alphabets: [dto.buildAlphabet({ name: "ROMAN" }), dto.buildAlphabet({ name: "GREEK" })],
+    });
+    expect(toXml(a, dto.alphabetsSchema)).toBe(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><alphabets><total>28</total><alphabet><name>ROMAN</name></alphabet><alphabet><name>GREEK</name></alphabet></alphabets>',
     );
   });
 });
@@ -148,11 +153,7 @@ describe("MapcodeDTO", () => {
 });
 
 // ---------------------------------------------------------------------------
-// MapcodeListDTO (bare JSON array)
-// NOTE: MapcodeListDTO XML uses JAXB @XmlRootElement(name="mapcodes") with
-// items appearing directly inside the root without a wrapper, same as
-// AlphabetsDTO / TerritoriesDTO. This requires the same serializer capability
-// that is currently absent. Only JSON is tested here.
+// MapcodeListDTO — JSON (bare array) + XML (objectListUnwrapped)
 // ---------------------------------------------------------------------------
 
 describe("MapcodeListDTO", () => {
@@ -171,6 +172,22 @@ describe("MapcodeListDTO", () => {
   it("JSON bare array international only — ApiCodesTest.checkCodesMapcodesJson (TEST_LATLON_INTL)", () => {
     const items = [dto.buildMapcode({ mapcode: "WHWZG.5Q6Q" })];
     expect(toJson(items, dto.mapcodeListSchema)).toBe('[{"mapcode":"WHWZG.5Q6Q"}]');
+  });
+
+  it("XML — same data as TEST_LATLON2 (unwrapped items under <mapcodes> root)", () => {
+    // MapcodeListDTO XML: toXml receives a plain object {mapcodes:[...]} built from the array.
+    // The xmlOrder uses objectListUnwrapped so items emit directly under <mapcodes>.
+    const value: Record<string, unknown> = {
+      mapcodes: [
+        dto.buildMapcode({ mapcode: "QKM.N4", territory: "NLD" }),
+        dto.buildMapcode({ mapcode: "CZQ.376", territory: "NLD" }),
+        dto.buildMapcode({ mapcode: "N39J.QW0", territory: "NLD" }),
+        dto.buildMapcode({ mapcode: "VHVN4.YZ74" }),
+      ],
+    };
+    expect(toXml(value, dto.mapcodeListSchema)).toBe(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><mapcodes><mapcode><mapcode>QKM.N4</mapcode><territory>NLD</territory></mapcode><mapcode><mapcode>CZQ.376</mapcode><territory>NLD</territory></mapcode><mapcode><mapcode>N39J.QW0</mapcode><territory>NLD</territory></mapcode><mapcode><mapcode>VHVN4.YZ74</mapcode></mapcode></mapcodes>',
+    );
   });
 });
 
@@ -198,14 +215,25 @@ describe("MapcodesDTO", () => {
     );
   });
 
-  // SERIALIZER GAP: The XML serializer cannot distinguish an absent nullable
-  // objectList field (territories=undefined → should omit) from an explicitly
-  // empty objectList (territories=[] → should emit <territories/>). JAXB omits
-  // the @XmlElementWrapper entirely when the backing field is null, but the
-  // current serializer always emits <territories/> for a missing/null/empty
-  // objectList. A new "nullableObjectList" field kind (or a separate nullability
-  // flag on the field) is needed in the serializer to fix this.
-  it.todo("XML — ApiCodesTest.checkCodesXml (TEST_LATLON1) — NEEDS serializer nullable-objectList support");
+  it("XML — ApiCodesTest.checkCodesXml (TEST_LATLON1) — territories undefined → omitted", () => {
+    const v = dto.buildMapcodes({
+      local: dto.buildMapcode({ mapcode: "JL0.KP", territory: "LUX" }),
+      international: dto.buildMapcode({ mapcode: "VJ0L6.9PNQ" }),
+      mapcodes: [
+        dto.buildMapcode({ mapcode: "JL0.KP", territory: "LUX" }),
+        dto.buildMapcode({ mapcode: "R8RN.07Z", territory: "LUX" }),
+        dto.buildMapcode({ mapcode: "SQB.NR3", territory: "BEL" }),
+        dto.buildMapcode({ mapcode: "R8RN.07Z", territory: "BEL" }),
+        dto.buildMapcode({ mapcode: "0L46.LG9", territory: "DEU" }),
+        dto.buildMapcode({ mapcode: "R8RN.07Z", territory: "FRA" }),
+        dto.buildMapcode({ mapcode: "VJ0L6.9PNQ" }),
+      ],
+      // territories omitted → undefined → no <territories> element in XML
+    });
+    expect(toXml(v, dto.mapcodesSchema)).toBe(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><mapcodes><local><mapcode>JL0.KP</mapcode><territory>LUX</territory></local><international><mapcode>VJ0L6.9PNQ</mapcode></international><mapcodes><mapcode><mapcode>JL0.KP</mapcode><territory>LUX</territory></mapcode><mapcode><mapcode>R8RN.07Z</mapcode><territory>LUX</territory></mapcode><mapcode><mapcode>SQB.NR3</mapcode><territory>BEL</territory></mapcode><mapcode><mapcode>R8RN.07Z</mapcode><territory>BEL</territory></mapcode><mapcode><mapcode>0L46.LG9</mapcode><territory>DEU</territory></mapcode><mapcode><mapcode>R8RN.07Z</mapcode><territory>FRA</territory></mapcode><mapcode><mapcode>VJ0L6.9PNQ</mapcode></mapcode></mapcodes></mapcodes>',
+    );
+  });
 
   it("JSON with territories — ApiCodesTest.checkCodesIncludeJson", () => {
     const v = dto.buildMapcodes({
@@ -442,10 +470,7 @@ describe("TerritoryDTO", () => {
 });
 
 // ---------------------------------------------------------------------------
-// TerritoriesDTO — JSON only
-// NOTE: TerritoriesDTO XML uses JAXB @XmlElement without @XmlElementWrapper,
-// emitting territory items directly inside the root <territories> alongside <total>.
-// Same serializer gap as AlphabetsDTO XML. Only JSON is tested here.
+// TerritoriesDTO — JSON + XML (objectListUnwrapped)
 // ---------------------------------------------------------------------------
 
 describe("TerritoriesDTO", () => {
@@ -465,6 +490,25 @@ describe("TerritoriesDTO", () => {
     });
     expect(toJson(td, dto.territoriesSchema)).toBe(
       '{"total":533,"territories":[{"fullNameAliases":["Worldwide","Earth"],"alphaCode":"AAA","alphaCodeMinimalUnambiguous":"AAA","alphaCodeMinimal":"AAA","fullName":"International","alphabets":[{"name":"ROMAN"}]}]}',
+    );
+  });
+
+  it("XML — ApiTerritoriesTest.checkTerritories2Xml (count=1 offset=-1, last = AAA)", () => {
+    const td = dto.buildTerritories({
+      total: 533,
+      territories: [
+        dto.buildTerritory({
+          alphaCode: "AAA",
+          alphaCodeMinimalUnambiguous: "AAA",
+          alphaCodeMinimal: "AAA",
+          fullName: "International",
+          fullNameAliases: ["Worldwide", "Earth"],
+          alphabets: [dto.buildAlphabet({ name: "ROMAN" })],
+        }),
+      ],
+    });
+    expect(toXml(td, dto.territoriesSchema)).toBe(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><territories><total>533</total><territory><alphaCode>AAA</alphaCode><alphaCodeMinimalUnambiguous>AAA</alphaCodeMinimalUnambiguous><alphaCodeMinimal>AAA</alphaCodeMinimal><fullName>International</fullName><aliases/><fullNameAliases><fullNameAlias>Worldwide</fullNameAlias><fullNameAlias>Earth</fullNameAlias></fullNameAliases><alphabets><alphabet><name>ROMAN</name></alphabet></alphabets></territory></territories>',
     );
   });
 });

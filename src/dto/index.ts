@@ -78,10 +78,10 @@ export const alphabetsSchema: Schema = {
     { name: "total", type: { kind: "int" } },
     { name: "alphabets", type: { kind: "objectList", itemName: "alphabet", schema: alphabetSchema } },
   ],
-  // XML: items at root level (unwrapped) — serializer gap; same field order for now.
+  // XML: items directly inside root (JAXB @XmlElement without @XmlElementWrapper).
   xmlOrder: [
     { name: "total", type: { kind: "int" } },
-    { name: "alphabets", type: { kind: "objectList", itemName: "alphabet", schema: alphabetSchema } },
+    { name: "alphabets", type: { kind: "objectListUnwrapped", itemName: "alphabet", schema: alphabetSchema } },
   ],
 };
 
@@ -209,8 +209,9 @@ export const mapcodeListSchema: Schema = {
   jsonOrder: [
     { name: "mapcodes", type: { kind: "objectList", itemName: "mapcode", schema: mapcodeSchema } },
   ],
+  // XML: items directly inside root (JAXB @XmlElement without @XmlElementWrapper).
   xmlOrder: [
-    { name: "mapcodes", type: { kind: "objectList", itemName: "mapcode", schema: mapcodeSchema } },
+    { name: "mapcodes", type: { kind: "objectListUnwrapped", itemName: "mapcode", schema: mapcodeSchema } },
   ],
 };
 
@@ -364,9 +365,10 @@ export const territoriesSchema: Schema = {
     { name: "total", type: { kind: "int" } },
     { name: "territories", type: { kind: "objectList", itemName: "territory", schema: territorySchema } },
   ],
+  // XML: items directly inside root (JAXB @XmlElement without @XmlElementWrapper).
   xmlOrder: [
     { name: "total", type: { kind: "int" } },
-    { name: "territories", type: { kind: "objectList", itemName: "territory", schema: territorySchema } },
+    { name: "territories", type: { kind: "objectListUnwrapped", itemName: "territory", schema: territorySchema } },
   ],
 };
 
@@ -393,8 +395,9 @@ export const territoryCandidatesSchema: Schema = {
   jsonOrder: [
     { name: "territories", type: { kind: "objectList", itemName: "territoryCandidate", schema: territoryCandidateSchema } },
   ],
+  // XML: items directly inside root (JAXB @XmlElement without @XmlElementWrapper).
   xmlOrder: [
-    { name: "territories", type: { kind: "objectList", itemName: "territoryCandidate", schema: territoryCandidateSchema } },
+    { name: "territories", type: { kind: "objectListUnwrapped", itemName: "territory", schema: territoryCandidateSchema } },
   ],
 };
 

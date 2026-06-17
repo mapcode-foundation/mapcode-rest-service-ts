@@ -27,29 +27,41 @@ function isNullish(v: unknown): boolean {
 
 function fieldXml(value: unknown, field: Field): string {
   const name = field.name;
-  // Empty/absent list → self-closing wrapper (JAXB renders <name/>).
-  if ((field.type.kind === "stringList" || field.type.kind === "objectList")) {
-    const arr = (value as unknown[] | null | undefined) ?? [];
-    if (arr.length === 0) return `<${name}/>`;
+  const kind = field.type.kind;
+
+  // objectListUnwrapped: items emitted directly at parent level, no wrapper element.
+  // null/undefined/[] → render nothing.
+  if (kind === "objectListUnwrapped") {
+    if (value == null) return "";
+    const arr = value as Record<string, unknown>[];
+    if (arr.length === 0) return "";
+    const t = field.type;
+    return arr.map((o) => `<${t.itemName}>${objectXmlBody(o, t.schema)}</${t.itemName}>`).join("");
   }
+
+  // stringList / objectList: distinguish null/undefined (omit) from [] (self-closing).
+  if (kind === "stringList" || kind === "objectList") {
+    if (value == null) return ""; // undefined or null → omit element entirely
+    const arr = value as unknown[];
+    if (arr.length === 0) return `<${name}/>`; // present but empty → <name/>
+    if (kind === "stringList") {
+      const t = field.type;
+      const items = arr.map((s) => `<${t.itemName}>${escapeXml(s as string)}</${t.itemName}>`).join("");
+      return `<${name}>${items}</${name}>`;
+    }
+    // objectList, non-empty
+    const t = field.type;
+    const items = arr.map((o) => `<${t.itemName}>${objectXmlBody(o as Record<string, unknown>, t.schema)}</${t.itemName}>`).join("");
+    return `<${name}>${items}</${name}>`;
+  }
+
   if (isNullish(value)) return "";
-  switch (field.type.kind) {
+  switch (kind) {
     case "string": return `<${name}>${escapeXml(value as string)}</${name}>`;
     case "boolean": return `<${name}>${value ? "true" : "false"}</${name}>`;
     case "int": return `<${name}>${String(value)}</${name}>`;
     case "double": return `<${name}>${formatDouble(value as number)}</${name}>`;
     case "object": return `<${name}>${objectXmlBody(value as Record<string, unknown>, field.type.schema)}</${name}>`;
-    case "stringList": {
-      const t = field.type;
-      const items = (value as string[]).map((s) => `<${t.itemName}>${escapeXml(s)}</${t.itemName}>`).join("");
-      return `<${name}>${items}</${name}>`;
-    }
-    case "objectList": {
-      const t = field.type;
-      const items = (value as Record<string, unknown>[])
-        .map((o) => `<${t.itemName}>${objectXmlBody(o, t.schema)}</${t.itemName}>`).join("");
-      return `<${name}>${items}</${name}>`;
-    }
   }
 }
 

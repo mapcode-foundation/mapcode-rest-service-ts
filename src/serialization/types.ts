@@ -19,6 +19,7 @@ export type FieldType =
   | { kind: "boolean" }
   | { kind: "object"; schema: Schema }
   | { kind: "objectList"; itemName: string; schema: Schema }
+  | { kind: "objectListUnwrapped"; itemName: string; schema: Schema }
   | { kind: "stringList"; itemName: string };
 
 export interface Field {
