@@ -20,8 +20,9 @@
 // `international` mapcode the endpoint returns (code / territory / offsetMeters,
 // as serialized) must equal what we recompute INDEPENDENTLY by calling
 // mapcode-ts directly (encodeToInternational + decode) with the same lon
-// wrapping (mapToLon), the same offset rounding (Math.round(d*1e6)/1e6) and the
-// same formatDouble the serializer uses.
+// wrapping (mapToLon) and the same offset rounding (Math.round(d*1e6)/1e6).
+// offsetMeters is compared as a RAW number (not via formatDouble on both sides,
+// which would mask a consistently-broken formatter).
 //
 // This guards against drift between the HTTP endpoint and the library: we are
 // NOT asserting hardcoded Java golden bytes, we are asserting the endpoint
@@ -34,7 +35,6 @@ import { buildServer } from "../src/server.ts";
 import { createMapcodeService } from "../src/domain/mapcode-service.ts";
 import { BoundaryService } from "../src/domain/boundary-service.ts";
 import { Alphabet, encodeToInternational, decode } from "mapcode-ts";
-import { formatDouble } from "../src/serialization/format.ts";
 import { mapToLon, distanceInMeters } from "../src/domain/geo.ts";
 
 let app: FastifyInstance;
@@ -173,10 +173,14 @@ describe("parity sweep — endpoint /mapcode/codes matches independent mapcode-t
               expect(actual.territory).toBe(exp.territory);
               expect(actual.territoryInAlphabet).toBe(exp.territoryInAlphabet);
 
-              // offsetMeters parity: compare the formatted/rounded value, not raw float.
+              // offsetMeters parity: compare the RAW numbers directly. Applying
+              // formatDouble to both sides would mask a consistently-broken
+              // formatDouble — the very drift this sweep must catch. The value
+              // parsed from the JSON body must equal the independently recomputed
+              // Math.round(distanceInMeters*1e6)/1e6.
               if (exp.offsetMeters !== undefined) {
                 expect(actual.offsetMeters).not.toBeUndefined();
-                expect(formatDouble(actual.offsetMeters as number)).toBe(formatDouble(exp.offsetMeters));
+                expect(actual.offsetMeters).toBe(exp.offsetMeters);
               } else {
                 expect(actual.offsetMeters).toBeUndefined();
               }
