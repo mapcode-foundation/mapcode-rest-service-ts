@@ -19,6 +19,7 @@
  */
 export function formatDouble(n: number): string {
   if (!Number.isFinite(n)) throw new Error(`Cannot format non-finite double: ${n}`);
+  if (Object.is(n, -0)) return "-0.0";
   if (Number.isInteger(n)) return `${n}.0`;
   return String(n);
 }

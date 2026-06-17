@@ -33,6 +33,10 @@ describe("formatDouble (Java Double.toString parity)", () => {
     expect(formatDouble(2.843693)).toBe("2.843693");
     expect(formatDouble(52.376514)).toBe("52.376514");
   });
+  it("renders signed zeros the way Java Double.toString does", () => {
+    expect(formatDouble(0)).toBe("0.0");
+    expect(formatDouble(-0)).toBe("-0.0");
+  });
 });
 
 describe("toJson", () => {
