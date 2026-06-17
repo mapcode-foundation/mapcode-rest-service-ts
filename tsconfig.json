@@ -11,6 +11,8 @@
     "skipLibCheck": true,
     "declaration": false,
     "sourceMap": true,
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src"]
