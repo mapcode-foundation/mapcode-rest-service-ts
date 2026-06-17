@@ -14,8 +14,30 @@
 
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { BoundaryService, pointInRing } from "../src/domain/boundary-service.ts";
+
+// Optional per-test override for the flatgeobuf GeoJSON deserializer. When set, the
+// mocked module returns this value; otherwise it delegates to the real implementation.
+// This lets us exercise the load() CSR-build path with hand-built FeatureCollections
+// without disturbing the tests that read the real .fgb fixture.
+let deserializeOverride:
+  | ((bytes: Uint8Array) => unknown)
+  | null = null;
+
+vi.mock("flatgeobuf", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("flatgeobuf")>();
+  return {
+    ...actual,
+    geojson: {
+      ...actual.geojson,
+      deserialize: (...args: Parameters<typeof actual.geojson.deserialize>) =>
+        deserializeOverride
+          ? deserializeOverride(args[0] as Uint8Array)
+          : (actual.geojson.deserialize as (...a: unknown[]) => unknown)(...args),
+    },
+  };
+});
 
 const FIXTURE = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -112,5 +134,68 @@ describe("BoundaryService", () => {
 
   it("rejects a missing borders file", async () => {
     await expect(BoundaryService.load("/does/not/exist.fgb")).rejects.toThrow();
+  });
+});
+
+describe("BoundaryService load — degenerate feature CSR rollback", () => {
+  afterEach(() => {
+    deserializeOverride = null;
+  });
+
+  it("handles a degenerate feature before a valid feature without spurious matches", async () => {
+    // Feed load() a hand-built FeatureCollection where a degenerate feature (a
+    // non-empty polygon array whose rings are all empty -> no vertices appended)
+    // PRECEDES a valid feature. Without the rollback, the degenerate feature leaves
+    // phantom polygons/rings in the CSR arrays and desynchronizes featurePolyStart;
+    // with the rollback, the CSR arrays are exactly as before the iteration.
+    //
+    // NOTE: empirically the phantom polygons left by a no-vertex feature all have an
+    // EMPTY outer ring, which point-in-ring always rejects, so the desync corrupts
+    // only internal polygon counts, not lookup RESULTS reachable via the public API.
+    // This test is therefore a behavioral regression guard (valid feature resolves;
+    // the dropped feature yields no match), not a proof of the counter arithmetic;
+    // see task-7-report.md for the full reachability analysis.
+    const collection = {
+      type: "FeatureCollection",
+      features: [
+        {
+          // Degenerate: two polygons, each a single empty ring -> contributes no
+          // vertices, but advances ringCount/polyCount and pushes to the offset
+          // lists before the rollback restores them.
+          geometry: { type: "MultiPolygon", coordinates: [[[]], [[]]] },
+          properties: { alphaCode: "BAD", parentAlphaCode: "", adminLevel: 2, area: 1 },
+        },
+        {
+          // Valid square (0,0)-(10,10).
+          geometry: {
+            type: "Polygon",
+            coordinates: [
+              [
+                [0, 0],
+                [10, 0],
+                [10, 10],
+                [0, 10],
+                [0, 0],
+              ],
+            ],
+          },
+          properties: { alphaCode: "GOOD", parentAlphaCode: "", adminLevel: 2, area: 100 },
+        },
+      ],
+    };
+    deserializeOverride = () => collection;
+
+    // Any path works; readFile content is ignored because deserialize is mocked.
+    const svc = await BoundaryService.load(FIXTURE);
+
+    // lookup(lat, lon): point (5,5) is inside the GOOD square.
+    const matches = svc.lookup(5, 5);
+    expect(matches.length).toBe(1);
+    expect(matches[0].alphaCode).toBe("GOOD");
+    // The dropped degenerate feature must never surface.
+    expect(matches.some((m) => m.alphaCode === "BAD")).toBe(false);
+
+    // A point outside the square returns nothing.
+    expect(svc.lookup(50, 50)).toEqual([]);
   });
 });

@@ -37,7 +37,9 @@ export interface TerritoryMatch {
  * @param endVertex   One past the last vertex index of the ring.
  * @param lon         Test point longitude.
  * @param lat         Test point latitude.
- * @returns           True if the point is strictly inside or on the even-odd boundary.
+ * @returns           True if the point is inside the ring per the even-odd rule.
+ *                    Behavior for a point lying exactly on a polygon boundary is
+ *                    unspecified.
  */
 export function pointInRing(
   coords: Float64Array,
@@ -181,6 +183,25 @@ export class BoundaryService {
     let vertexCount = 0;
 
     for (const feature of featureCollection.features) {
+      // Snapshot the mutable CSR build-state BEFORE touching any of it, so a feature
+      // that turns out to be skipped or degenerate can be rolled back to leave the
+      // arrays exactly as they were at the start of this iteration.
+      const snapCoordsLen = coordsList.length;
+      const snapRingOffsetsLen = ringOffsetsList.length;
+      const snapPolyRingStartLen = polyRingStartList.length;
+      const snapRingCount = ringCount;
+      const snapPolyCount = polyCount;
+      const snapVertexCount = vertexCount;
+
+      const rollback = (): void => {
+        coordsList.length = snapCoordsLen;
+        ringOffsetsList.length = snapRingOffsetsLen;
+        polyRingStartList.length = snapPolyRingStartLen;
+        ringCount = snapRingCount;
+        polyCount = snapPolyCount;
+        vertexCount = snapVertexCount;
+      };
+
       const geom = feature?.geometry;
       const props = feature?.properties ?? {};
       if (!geom) {
@@ -253,8 +274,9 @@ export class BoundaryService {
       }
 
       if (!appendedAnyVertex) {
-        // Roll back: this feature contributed no geometry; remove its empty polys.
-        // (In practice this does not happen for valid borders data.)
+        // Degenerate feature (empty rings / no vertices): roll back the partial CSR
+        // mutations made above so the arrays are exactly as before this iteration.
+        rollback();
         continue;
       }
 
