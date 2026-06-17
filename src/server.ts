@@ -22,6 +22,7 @@ import { registerRootRoutes } from "./routes/root.routes.ts";
 import { registerCoordsRoutes } from "./routes/coords.routes.ts";
 import { registerCodesRoutes } from "./routes/codes.routes.ts";
 import { registerTerritoriesRoutes } from "./routes/territories.routes.ts";
+import { registerAlphabetsRoutes } from "./routes/alphabets.routes.ts";
 
 // ---------------------------------------------------------------------------
 // ServerDeps — passed to all route modules
@@ -82,8 +83,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerCoordsRoutes(app, deps);
   registerCodesRoutes(app, deps);
   registerTerritoriesRoutes(app, deps);
-  // Future route modules are added here:
-  // registerAlphabetsRoutes(app, deps);
+  registerAlphabetsRoutes(app, deps);
 
   return app;
 }
