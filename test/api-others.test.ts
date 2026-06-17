@@ -98,6 +98,32 @@ describe("GET /mapcode/version — XML", () => {
   });
 });
 
+describe("Accept negotiation", () => {
+  it("honors q-values when JSON is preferred over XML", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/mapcode/version",
+      headers: { accept: "application/xml;q=0.1, application/json;q=0.9" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/application\/json/);
+    expect(res.body).toBe('{"version":"1.0"}');
+  });
+
+  it("honors q-values when XML is preferred over JSON", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/mapcode/version",
+      headers: { accept: "application/json;q=0.1, application/xml;q=0.9" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["content-type"]).toMatch(/application\/xml/);
+    expect(res.body).toBe(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><version><version>1.0</version></version>'
+    );
+  });
+});
+
 describe("Content-type headers", () => {
   it("sets application/json;charset=UTF-8 for JSON response", async () => {
     const res = await app.inject({

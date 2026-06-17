@@ -87,9 +87,9 @@ Run the built server:
 ```bash
 npm run build
 MAPCODE_BORDERS_PATH=/path/to/borders.fgb node --env-file=.env dist/index.js
-# → mapcode-rest-service-ts listening on :8080 (version 1.0.0)
+# → mapcode-rest-service-ts listening on :8080 (version 1.0.1)
 curl localhost:8080/mapcode/version
-# {"version":"1.0.0"}
+# {"version":"1.0.1"}
 ```
 
 ## API

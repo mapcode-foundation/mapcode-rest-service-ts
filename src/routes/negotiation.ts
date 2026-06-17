@@ -14,6 +14,35 @@
 
 export type OutputFormat = "json" | "xml";
 
+function preferredFormat(acceptHeader?: string): OutputFormat {
+  if (acceptHeader === undefined) {
+    return "json";
+  }
+
+  let jsonQ = -1;
+  let xmlQ = -1;
+  for (const entry of acceptHeader.split(",")) {
+    const [typePart, ...paramParts] = entry.split(";");
+    const mediaType = typePart.trim().toLowerCase();
+    let q = 1;
+    for (const param of paramParts) {
+      const [rawName, rawValue] = param.split("=");
+      if (rawName.trim().toLowerCase() === "q") {
+        const parsed = Number(rawValue);
+        q = Number.isFinite(parsed) ? parsed : 0;
+      }
+    }
+    if (mediaType === "application/json") {
+      jsonQ = Math.max(jsonQ, q);
+    }
+    if (mediaType === "application/xml") {
+      xmlQ = Math.max(xmlQ, q);
+    }
+  }
+
+  return xmlQ >= 0 && xmlQ >= jsonQ ? "xml" : "json";
+}
+
 /**
  * Determine the output format for a request.
  *
@@ -48,9 +77,8 @@ export function resolveFormat(
     };
   }
 
-  // No path prefix — fall back to Accept header
-  const format: OutputFormat =
-    acceptHeader?.includes("application/xml") ? "xml" : "json";
+  // No path prefix — fall back to Accept header.
+  const format = preferredFormat(acceptHeader);
 
   return { format, underlyingPath: pathOnly };
 }

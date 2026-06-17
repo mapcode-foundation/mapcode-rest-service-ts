@@ -131,6 +131,15 @@ describe("invalid include token → 400", () => {
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain("include");
   });
+
+  it("returns 400 for repeated include query parameters", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/mapcode/coords/${TEST_CODE1}?include=RECTANGLE&include=BOGUS`,
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain("include");
+  });
 });
 
 describe("invalid mapcode format → 400", () => {
@@ -138,6 +147,15 @@ describe("invalid mapcode format → 400", () => {
     const res = await app.inject({
       method: "GET",
       url: "/mapcode/coords/NOT_A_MAPCODE",
+    });
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain("mapcode");
+  });
+
+  it("does not double-decode percent characters in the code path segment", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/mapcode/coords/%25",
     });
     expect(res.statusCode).toBe(400);
     expect(res.body).toContain("mapcode");

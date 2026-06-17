@@ -17,6 +17,7 @@ import type { ServerDeps } from "../server.ts";
 import { resolveFormat } from "./negotiation.ts";
 import { respond } from "../serialization/respond.ts";
 import { handleGetTerritories, handleGetTerritory } from "../resources/territories.ts";
+import { getQueryParam } from "./query.ts";
 
 export function registerTerritoriesRoutes(app: FastifyInstance, deps: ServerDeps): void {
   const { mapcodeService } = deps;
@@ -26,10 +27,10 @@ export function registerTerritoriesRoutes(app: FastifyInstance, deps: ServerDeps
   // -------------------------------------------------------------------------
   const territoriesHandler: RouteHandlerMethod = async (request, reply) => {
     const { format } = resolveFormat(request.url, request.headers.accept);
-    const query = request.query as Record<string, string | undefined>;
+    const query = request.query as Record<string, unknown>;
 
     const { dto, schema } = handleGetTerritories(
-      { offset: query["offset"], count: query["count"] },
+      { offset: getQueryParam(query, "offset"), count: getQueryParam(query, "count") },
       mapcodeService
     );
     return respond(reply, format, dto, schema);
@@ -44,10 +45,10 @@ export function registerTerritoriesRoutes(app: FastifyInstance, deps: ServerDeps
   const territoryHandler: RouteHandlerMethod = async (request, reply) => {
     const { format } = resolveFormat(request.url, request.headers.accept);
     const params = request.params as Record<string, string>;
-    const query = request.query as Record<string, string | undefined>;
+    const query = request.query as Record<string, unknown>;
 
     const { dto, schema } = handleGetTerritory(
-      { territory: params["territory"] ?? "", context: query["context"] },
+      { territory: params["territory"] ?? "", context: getQueryParam(query, "context") },
       mapcodeService
     );
     return respond(reply, format, dto, schema);

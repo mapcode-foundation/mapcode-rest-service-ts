@@ -18,6 +18,7 @@ import { resolveFormat } from "./negotiation.ts";
 import { respond } from "../serialization/respond.ts";
 import { ApiForbiddenError } from "../errors.ts";
 import { handleCoords } from "../resources/coords.ts";
+import { getQueryParam } from "./query.ts";
 
 export function registerCoordsRoutes(app: FastifyInstance, deps: ServerDeps): void {
   const { mapcodeService } = deps;
@@ -27,17 +28,17 @@ export function registerCoordsRoutes(app: FastifyInstance, deps: ServerDeps): vo
   // (also /mapcode/xml/coords/{code} and /mapcode/json/coords/{code})
   //
   // The {code} param may contain spaces (encoded as %20) and dots.
-  // Fastify preserves the raw param value; we decodeURIComponent it.
+  // Fastify decodes route params before invoking handlers.
   // -------------------------------------------------------------------------
   const coordsHandler: RouteHandlerMethod = async (request, reply) => {
     const { format } = resolveFormat(request.url, request.headers.accept);
     const params = request.params as Record<string, string>;
-    const query = request.query as Record<string, string | undefined>;
+    const query = request.query as Record<string, unknown>;
 
-    const code = decodeURIComponent(params["code"] ?? "");
-    const context = query["context"];
-    const territory = query["territory"];
-    const include = query["include"] ?? "";
+    const code = params["code"] ?? "";
+    const context = getQueryParam(query, "context");
+    const territory = getQueryParam(query, "territory");
+    const include = getQueryParam(query, "include") ?? "";
 
     const { dto, schema } = handleCoords(
       { code, context, territory, include },

@@ -77,6 +77,17 @@ describe("checkIncorrectParameters", () => {
     expect((await getJson("/mapcode/codes/1,1?alphabet=")).statusCode).toBe(400);
     expect((await getJson("/mapcode/codes/1,1?alphabet=x")).statusCode).toBe(400);
   });
+
+  it("returns 400 for repeated include query parameters", async () => {
+    const res = await getJson("/mapcode/codes/52,5?include=offset&include=territory");
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toContain("include");
+  });
+
+  it("does not double-decode the lat/lon path segment", async () => {
+    const res = await getJson("/mapcode/codes/52%252C5");
+    expect(res.statusCode).toBe(404);
+  });
 });
 
 describe("checkCodesCheckLatLon", () => {

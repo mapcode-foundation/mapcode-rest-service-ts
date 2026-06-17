@@ -255,6 +255,11 @@ describe("checkTerritoryStateJson", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it("GET /mapcode/territories/in with repeated context → 400", async () => {
+    const res = await getJson("/mapcode/territories/in?context=us&context=ru");
+    expect(res.statusCode).toBe(400);
+  });
+
   it("GET /mapcode/territories/in?context=nld → 400", async () => {
     const res = await getJson("/mapcode/territories/in?context=nld");
     expect(res.statusCode).toBe(400);

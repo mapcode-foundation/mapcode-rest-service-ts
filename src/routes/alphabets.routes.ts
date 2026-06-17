@@ -17,6 +17,7 @@ import type { ServerDeps } from "../server.ts";
 import { resolveFormat } from "./negotiation.ts";
 import { respond } from "../serialization/respond.ts";
 import { handleGetAlphabets, handleGetAlphabet } from "../resources/alphabets.ts";
+import { getQueryParam } from "./query.ts";
 
 export function registerAlphabetsRoutes(app: FastifyInstance, deps: ServerDeps): void {
   const { mapcodeService } = deps;
@@ -26,10 +27,10 @@ export function registerAlphabetsRoutes(app: FastifyInstance, deps: ServerDeps):
   // -------------------------------------------------------------------------
   const alphabetsHandler: RouteHandlerMethod = async (request, reply) => {
     const { format } = resolveFormat(request.url, request.headers.accept);
-    const query = request.query as Record<string, string | undefined>;
+    const query = request.query as Record<string, unknown>;
 
     const { dto, schema } = handleGetAlphabets(
-      { offset: query["offset"], count: query["count"] },
+      { offset: getQueryParam(query, "offset"), count: getQueryParam(query, "count") },
       mapcodeService
     );
     return respond(reply, format, dto, schema);

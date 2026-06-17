@@ -31,12 +31,26 @@ function packageVersion(): string {
   }
 }
 
+function parsePort(value: string | undefined): number {
+  if (value === undefined || value === "") {
+    return 8080;
+  }
+  if (!/^\d+$/.test(value)) {
+    throw new Error(`PORT must be an integer between 0 and 65535: ${value}`);
+  }
+  const port = Number(value);
+  if (!Number.isSafeInteger(port) || port < 0 || port > 65535) {
+    throw new Error(`PORT must be an integer between 0 and 65535: ${value}`);
+  }
+  return port;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const bordersPath = (env.MAPCODE_BORDERS_PATH ?? "").trim();
   if (!bordersPath) {
     throw new Error("MAPCODE_BORDERS_PATH is required (path to the borders.fgb file).");
   }
-  const port = env.PORT ? Number.parseInt(env.PORT, 10) : 8080;
+  const port = parsePort(env.PORT?.trim());
   const version = (env.VERSION ?? "").trim() || packageVersion();
   return { port, bordersPath, version };
 }

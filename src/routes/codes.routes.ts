@@ -18,14 +18,14 @@ import { resolveFormat } from "./negotiation.ts";
 import { respond, respondList } from "../serialization/respond.ts";
 import { ApiForbiddenError, ApiNotFoundError } from "../errors.ts";
 import { handleCodes, handleTerritoriesForLatLon } from "../resources/codes.ts";
+import { getQueryParam } from "./query.ts";
 
-/** Split a "lat,lon" path segment on the FIRST comma. */
+/** Split a decoded "lat,lon" path segment on the FIRST comma. */
 function splitLatLon(latlon: string): { latStr: string; lonStr: string } | null {
-  const decoded = decodeURIComponent(latlon);
-  const comma = decoded.indexOf(",");
+  const comma = latlon.indexOf(",");
   if (comma < 0) return null; // no comma → 404
-  const latStr = decoded.slice(0, comma);
-  const lonStr = decoded.slice(comma + 1);
+  const latStr = latlon.slice(0, comma);
+  const lonStr = latlon.slice(comma + 1);
   if (latStr === "" || lonStr === "") return null; // empty part → 404
   return { latStr, lonStr };
 }
@@ -49,7 +49,7 @@ export function registerCodesRoutes(app: FastifyInstance, deps: ServerDeps): voi
   const codesHandler: RouteHandlerMethod = async (request, reply) => {
     const { format } = resolveFormat(request.url, request.headers.accept);
     const params = request.params as Record<string, string>;
-    const query = request.query as Record<string, string | undefined>;
+    const query = request.query as Record<string, unknown>;
 
     const ll = splitLatLon(params["latlon"] ?? "");
     if (ll === null) {
@@ -60,12 +60,12 @@ export function registerCodesRoutes(app: FastifyInstance, deps: ServerDeps): voi
       {
         latStr: ll.latStr,
         lonStr: ll.lonStr,
-        precision: query["precision"],
-        territory: query["territory"],
-        country: query["country"],
-        context: query["context"],
-        alphabet: query["alphabet"],
-        include: query["include"] ?? "",
+        precision: getQueryParam(query, "precision"),
+        territory: getQueryParam(query, "territory"),
+        country: getQueryParam(query, "country"),
+        context: getQueryParam(query, "context"),
+        alphabet: getQueryParam(query, "alphabet"),
+        include: getQueryParam(query, "include") ?? "",
       },
       mapcodeService,
       boundaryService
@@ -104,7 +104,7 @@ export function registerCodesRoutes(app: FastifyInstance, deps: ServerDeps): voi
   const codesTypeHandler: RouteHandlerMethod = async (request, reply) => {
     const { format } = resolveFormat(request.url, request.headers.accept);
     const params = request.params as Record<string, string>;
-    const query = request.query as Record<string, string | undefined>;
+    const query = request.query as Record<string, unknown>;
 
     const type = (params["type"] ?? "").toLowerCase();
     if (type !== "mapcodes" && type !== "local" && type !== "international") {
@@ -121,12 +121,12 @@ export function registerCodesRoutes(app: FastifyInstance, deps: ServerDeps): voi
         latStr: ll.latStr,
         lonStr: ll.lonStr,
         type,
-        precision: query["precision"],
-        territory: query["territory"],
-        country: query["country"],
-        context: query["context"],
-        alphabet: query["alphabet"],
-        include: query["include"] ?? "",
+        precision: getQueryParam(query, "precision"),
+        territory: getQueryParam(query, "territory"),
+        country: getQueryParam(query, "country"),
+        context: getQueryParam(query, "context"),
+        alphabet: getQueryParam(query, "alphabet"),
+        include: getQueryParam(query, "include") ?? "",
       },
       mapcodeService,
       boundaryService

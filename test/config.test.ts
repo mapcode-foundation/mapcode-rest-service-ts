@@ -30,4 +30,14 @@ describe("loadConfig", () => {
   it("throws when MAPCODE_BORDERS_PATH is missing", () => {
     expect(() => loadConfig({})).toThrow(/MAPCODE_BORDERS_PATH/);
   });
+
+  it("rejects malformed PORT values", () => {
+    expect(() => loadConfig({ PORT: "abc", MAPCODE_BORDERS_PATH: "/x/b.fgb" })).toThrow(/PORT/);
+    expect(() => loadConfig({ PORT: "123abc", MAPCODE_BORDERS_PATH: "/x/b.fgb" })).toThrow(/PORT/);
+  });
+
+  it("rejects PORT values outside the listenable range", () => {
+    expect(() => loadConfig({ PORT: "-1", MAPCODE_BORDERS_PATH: "/x/b.fgb" })).toThrow(/PORT/);
+    expect(() => loadConfig({ PORT: "65536", MAPCODE_BORDERS_PATH: "/x/b.fgb" })).toThrow(/PORT/);
+  });
 });
