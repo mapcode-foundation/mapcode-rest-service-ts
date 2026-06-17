@@ -172,8 +172,11 @@ function resolveTerritory(paramTerritory: string, paramParent: string | null): T
   if (parentTerritory !== null) {
     try {
       return Territory.fromString(paramTerritory.toUpperCase(), parentTerritory);
-    } catch {
-      // If using the parent fails, fall through and try without parent.
+    } catch (err) {
+      // Mirror Java: only swallow UnknownTerritoryException; other errors
+      // (e.g. IllegalArgumentException "NLD is not a parent territory") propagate.
+      if (!(err instanceof UnknownTerritoryError)) throw err;
+      // If using the parent fails with an UnknownTerritoryError, fall through.
     }
   }
 
