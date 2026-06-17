@@ -13,11 +13,17 @@
 // limitations under the License.
 
 import { loadConfig } from "./config.ts";
+import { BoundaryService } from "./domain/boundary-service.ts";
+import { createMapcodeService } from "./domain/mapcode-service.ts";
+import { buildServer } from "./server.ts";
 
 async function main(): Promise<void> {
   const config = loadConfig();
-  // Boundary service + server are wired in Task 13.
-  console.log(`mapcode-rest-service-ts config loaded: port=${config.port}, version=${config.version}`);
+  const boundaryService = await BoundaryService.load(config.bordersPath);
+  const mapcodeService = createMapcodeService();
+  const app = buildServer({ mapcodeService, boundaryService, version: config.version });
+  await app.listen({ port: config.port, host: "0.0.0.0" });
+  console.log(`mapcode-rest-service-ts listening on :${config.port} (version ${config.version})`);
 }
 
 main().catch((err) => {

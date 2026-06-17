@@ -30,7 +30,13 @@ function fieldXml(value: unknown, field: Field): string {
   const kind = field.type.kind;
 
   // objectListUnwrapped: items emitted directly at parent level, no wrapper element.
-  // null/undefined/[] → render nothing.
+  // null/undefined/[] → render no item children. The list's root element is always
+  // emitted by toXml(), so an empty unwrapped list serialises as the bare root with
+  // no children, e.g. <territories></territories>. This is the chosen well-formed,
+  // JSON-consistent at-sea response: JSON {"territories":[]} ↔ XML <territories></territories>.
+  // emitEmpty (set on the JSON side to force "[]" instead of omission) needs no extra
+  // handling here because the unwrapped root is never omitted — an empty list and an
+  // emitEmpty empty list produce identical, well-formed XML.
   if (kind === "objectListUnwrapped") {
     if (value == null) return "";
     const arr = value as Record<string, unknown>[];

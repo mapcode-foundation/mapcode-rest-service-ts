@@ -108,6 +108,21 @@ describe("lonOutOfRangeIsWrapped", () => {
   });
 });
 
+describe("pointAtSeaReturnsEmptyListXml", () => {
+  it("(0,-30) mid-Atlantic XML → <territories></territories> (consistent with JSON [])", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/mapcode/codes/0.0,-30.0/territories",
+      headers: { accept: "application/xml" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        "<territories></territories>"
+    );
+  });
+});
+
 describe("pointInsideCountryReturnsCountryXml", () => {
   it("(52,5) inside NLD → XML wraps in <territoryCandidate>", async () => {
     const res = await app.inject({
