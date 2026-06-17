@@ -1,0 +1,29 @@
+{
+  "name": "mapcode-rest-service-ts",
+  "version": "1.0.0",
+  "description": "TypeScript port of the Mapcode REST API service.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "node --env-file=.env --experimental-strip-types src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node --env-file=.env dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "license": "Apache-2.0",
+  "dependencies": {
+    "fastify": "^5.2.0",
+    "flatbush": "^4.4.0",
+    "flatgeobuf": "^3.36.0",
+    "mapcode-ts": "file:../mapcode-ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.9"
+  }
+}

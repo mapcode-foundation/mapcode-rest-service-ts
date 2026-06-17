@@ -1,0 +1,42 @@
+// Copyright (C) 2026, Stichting Mapcode Foundation (http://www.mapcode.com)
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+export interface Config {
+  port: number;
+  bordersPath: string;
+  version: string;
+}
+
+function packageVersion(): string {
+  try {
+    const url = new URL("../package.json", import.meta.url);
+    const pkg = JSON.parse(readFileSync(fileURLToPath(url), "utf8"));
+    return typeof pkg.version === "string" && pkg.version.length > 0 ? pkg.version : "0.0.0";
+  } catch {
+    return "0.0.0";
+  }
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+  const bordersPath = (env.MAPCODE_BORDERS_PATH ?? "").trim();
+  if (!bordersPath) {
+    throw new Error("MAPCODE_BORDERS_PATH is required (path to the borders.fgb file).");
+  }
+  const port = env.PORT ? Number.parseInt(env.PORT, 10) : 8080;
+  const version = (env.VERSION ?? "").trim() || packageVersion();
+  return { port, bordersPath, version };
+}
