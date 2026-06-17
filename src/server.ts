@@ -68,7 +68,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const method = request.method.toUpperCase();
     if (method !== "GET" && method !== "HEAD") {
       const { format } = resolveFormat(request.url, request.headers.accept);
-      await respondError(reply, format, 405, `Method not allowed: ${request.method}`);
+      return respondError(reply, format, 405, `Method not allowed: ${request.method}`);
     }
   });
 

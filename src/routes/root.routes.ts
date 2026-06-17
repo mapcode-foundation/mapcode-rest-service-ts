@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, RouteHandlerMethod } from "fastify";
 import type { ServerDeps } from "../server.ts";
 import { resolveFormat } from "./negotiation.ts";
 import { respond, respondHtml } from "../serialization/respond.ts";
@@ -24,33 +24,29 @@ export function registerRootRoutes(app: FastifyInstance, deps: ServerDeps): void
   // -------------------------------------------------------------------------
   // GET /mapcode — HTML help page
   // -------------------------------------------------------------------------
-  app.get("/mapcode", async (_request, reply) => {
+  const helpHandler: RouteHandlerMethod = async (_request, reply) => {
     return respondHtml(reply, getHelpHtml(version));
-  });
+  };
+
+  app.get("/mapcode", helpHandler);
 
   // -------------------------------------------------------------------------
   // GET /mapcode/version (+ /mapcode/xml/version + /mapcode/json/version)
   // -------------------------------------------------------------------------
-  const versionHandler = async (
-    request: { url: string; headers: { accept?: string } },
-    reply: Parameters<typeof respond>[0]
-  ) => {
+  const versionHandler: RouteHandlerMethod = async (request, reply) => {
     const { format } = resolveFormat(request.url, request.headers.accept);
     return respond(reply, format, getVersionDto(version), versionSchema);
   };
 
-  app.get("/mapcode/version", versionHandler as never);
-  app.get("/mapcode/xml/version", versionHandler as never);
-  app.get("/mapcode/json/version", versionHandler as never);
+  app.get("/mapcode/version", versionHandler);
+  app.get("/mapcode/xml/version", versionHandler);
+  app.get("/mapcode/json/version", versionHandler);
 
   // -------------------------------------------------------------------------
   // GET /mapcode/status (+ /mapcode/xml/status + /mapcode/json/status)
   // Status returns 200 with empty body on success, 500 on failure.
   // -------------------------------------------------------------------------
-  const statusHandler = async (
-    _request: unknown,
-    reply: Parameters<typeof respond>[0]
-  ) => {
+  const statusHandler: RouteHandlerMethod = async (_request, reply) => {
     const ok = getStatus(mapcodeService);
     if (ok) {
       return reply.code(200).send("");
@@ -58,7 +54,7 @@ export function registerRootRoutes(app: FastifyInstance, deps: ServerDeps): void
     return reply.code(500).send("");
   };
 
-  app.get("/mapcode/status", statusHandler as never);
-  app.get("/mapcode/xml/status", statusHandler as never);
-  app.get("/mapcode/json/status", statusHandler as never);
+  app.get("/mapcode/status", statusHandler);
+  app.get("/mapcode/xml/status", statusHandler);
+  app.get("/mapcode/json/status", statusHandler);
 }
