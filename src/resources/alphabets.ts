@@ -21,6 +21,7 @@ import {
   alphabetsSchema,
 } from "../dto/index.ts";
 import { ApiError, ApiInvalidFormatError, ApiIntegerOutOfRangeError } from "../errors.ts";
+import { parseIntStrict, INTEGER_MAX } from "./params.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level cache of the full alphabet DTO list (built once on first call).
@@ -62,7 +63,7 @@ export function handleGetAlphabets(
     throw new ApiInvalidFormatError("count", countStr, "integer");
   }
   if (count < 0) {
-    throw new ApiIntegerOutOfRangeError("count", count, 0, n);
+    throw new ApiIntegerOutOfRangeError("count", count, 0, INTEGER_MAX);
   }
 
   // Parse offset.
@@ -115,11 +116,5 @@ export function handleGetAlphabet(
 }
 
 // ---------------------------------------------------------------------------
-// Helpers.
+// (parseIntStrict is imported from ./params.ts)
 // ---------------------------------------------------------------------------
-
-function parseIntStrict(s: string): number | null {
-  if (s === "") return null;
-  if (!/^[+-]?\d+$/.test(s)) return null;
-  return parseInt(s, 10);
-}

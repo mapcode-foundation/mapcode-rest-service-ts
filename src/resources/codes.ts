@@ -24,11 +24,11 @@ import {
   buildMapcodes,
   mapcodesSchema,
   mapcodeListSchema,
-  buildRectangle,
   buildTerritoryCandidate,
   buildTerritoryCandidates,
   territoryCandidatesSchema,
 } from "../dto/index.ts";
+import { parseIntStrict } from "./params.ts";
 import {
   ApiInvalidFormatError,
   ApiNotFoundError,
@@ -392,17 +392,6 @@ function emptyIfNull(s: string | undefined | null): string {
 
 function isBetween(v: number, min: number, max: number): boolean {
   return v >= min && v <= max;
-}
-
-/**
- * Strict integer parse mirroring Java's Integer.valueOf(StringUtils.nullToEmpty(s)):
- * empty string and any non-integer text throw (returned as null here). A leading
- * sign and pure digits are accepted; decimals like "1.0" are rejected.
- */
-function parseIntStrict(s: string): number | null {
-  if (s === "") return null;
-  if (!/^[+-]?\d+$/.test(s)) return null;
-  return parseInt(s, 10);
 }
 
 /** Stable sort in place (Array.prototype.sort is stable in V8, but be explicit). */

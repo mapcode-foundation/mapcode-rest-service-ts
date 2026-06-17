@@ -23,6 +23,7 @@ import {
   buildAlphabet,
 } from "../dto/index.ts";
 import { ApiInvalidFormatError, ApiIntegerOutOfRangeError } from "../errors.ts";
+import { parseIntStrict, INTEGER_MAX } from "./params.ts";
 
 // ---------------------------------------------------------------------------
 // Module-level cache of the full territory DTO list (built once on first call).
@@ -75,7 +76,7 @@ export function handleGetTerritories(
     throw new ApiInvalidFormatError("count", countStr, "integer");
   }
   if (count < 0) {
-    throw new ApiIntegerOutOfRangeError("count", count, 0, n);
+    throw new ApiIntegerOutOfRangeError("count", count, 0, INTEGER_MAX);
   }
 
   // Parse offset.
@@ -128,11 +129,5 @@ export function handleGetTerritory(
 }
 
 // ---------------------------------------------------------------------------
-// Helpers.
+// (parseIntStrict is imported from ./params.ts)
 // ---------------------------------------------------------------------------
-
-function parseIntStrict(s: string): number | null {
-  if (s === "") return null;
-  if (!/^[+-]?\d+$/.test(s)) return null;
-  return parseInt(s, 10);
-}

@@ -63,13 +63,11 @@ export function buildAlphabet(f: AlphabetFields): Record<string, unknown> {
 // AlphabetsDTO
 //
 // JSON: {"total":N,"alphabets":[...]}
-// XML NOTE: Java uses @XmlElement without @XmlElementWrapper, so alphabet
-// items appear directly inside the root <alphabets> element alongside <total>,
-// with NO inner <alphabets> wrapper. This "unwrapped objectList" pattern is
-// NOT currently supported by the serializer (which always wraps objectList
-// items in a container element). Until the serializer gains an
-// "objectListUnwrapped" field kind, AlphabetsDTO XML serialization is
-// unavailable. JSON serialization is fully supported.
+// XML:  <alphabets><total>N</total><alphabet>...</alphabet>...</alphabets>
+//       Items appear directly inside the root <alphabets> element alongside
+//       <total>, with NO inner <alphabets> wrapper. This matches the Java
+//       JAXB @XmlElement without @XmlElementWrapper pattern and is rendered
+//       via the "objectListUnwrapped" field kind in xmlOrder.
 // ===========================================================================
 
 export const alphabetsSchema: Schema = {
@@ -198,10 +196,12 @@ export function buildMapcode(f: MapcodeFields): Record<string, unknown> {
 // ===========================================================================
 // MapcodeListDTO
 //
-// JSON: bare array (no wrapper object) — toJson(array, schema) special case.
-// XML NOTE: Java @XmlRootElement(name="mapcodes") with items directly inside
-// root (same unwrapped pattern as AlphabetsDTO). Serializer gap for XML.
-// The jsonOrder[0] objectList is used by toJson for the bare-array case.
+// JSON: bare array (no wrapper object) — toJson(array, schema) special case;
+//       the jsonOrder[0] objectList is used by toJson for the bare-array case.
+// XML:  <mapcodes><mapcode>...</mapcode>...</mapcodes>
+//       Items appear directly inside the root <mapcodes> element (Java
+//       @XmlRootElement + @XmlElement without @XmlElementWrapper), rendered
+//       via "objectListUnwrapped" in xmlOrder.
 // ===========================================================================
 
 export const mapcodeListSchema: Schema = {
@@ -354,9 +354,11 @@ export function buildTerritory(f: TerritoryFields): Record<string, unknown> {
 // TerritoriesDTO
 //
 // JSON: {"total":N,"territories":[...]}
-// XML NOTE: Same unwrapped pattern as AlphabetsDTO — territory items appear
-// directly inside the root <territories> element alongside <total>, with no
-// inner <territories> wrapper. Serializer gap for XML; JSON only.
+// XML:  <territories><total>N</total><territory>...</territory>...</territories>
+//       Territory items appear directly inside the root <territories> element
+//       alongside <total>, with no inner <territories> wrapper. This matches
+//       the Java JAXB @XmlElement without @XmlElementWrapper pattern and is
+//       rendered via "objectListUnwrapped" in xmlOrder.
 // ===========================================================================
 
 export const territoriesSchema: Schema = {
@@ -385,9 +387,10 @@ export function buildTerritories(f: TerritoriesFields): Record<string, unknown> 
 // TerritoryCandidatesDTO
 //
 // JSON: {"territories":[...]}
-// XML NOTE: Java uses @XmlElement(name="territoryCandidate") without
-// @XmlElementWrapper, so items appear directly inside root <territories>.
-// Same serializer gap as AlphabetsDTO/TerritoriesDTO for XML.
+// XML:  <territories><territoryCandidate>...</territoryCandidate>...</territories>
+//       Items appear directly inside root <territories> (Java
+//       @XmlElement(name="territoryCandidate") without @XmlElementWrapper),
+//       rendered via "objectListUnwrapped" in xmlOrder.
 // ===========================================================================
 
 export const territoryCandidatesSchema: Schema = {

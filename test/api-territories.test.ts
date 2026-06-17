@@ -98,6 +98,26 @@ describe("checkTerritoriesCountJsonError", () => {
     const res = await getJson("/mapcode/territories?count=-1");
     expect(res.statusCode).toBe(400);
   });
+
+  it("count=-1 → 400 body message contains 2147483647 (not list length)", async () => {
+    const res = await getJson("/mapcode/territories?count=-1");
+    expect(res.statusCode).toBe(400);
+    const body = JSON.parse(res.body) as { message: string; status: number };
+    expect(body.message).toContain("2147483647");
+    expect(body.message).not.toContain("533");
+  });
+
+  it("count=9999999999 → 400 (exceeds int32 max)", async () => {
+    const res = await getJson("/mapcode/territories?count=9999999999");
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("count=1000 → 200 (large but valid, clamped to list size)", async () => {
+    const res = await getJson("/mapcode/territories?count=1000");
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { total: number };
+    expect(body.total).toBe(533);
+  });
 });
 
 describe("checkTerritories2Json", () => {
