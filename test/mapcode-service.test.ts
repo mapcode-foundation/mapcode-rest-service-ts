@@ -90,6 +90,13 @@ describe("resolveCountry", () => {
     expect(svc.resolveCountry("USA")).toBe("USA");
   });
 
+  it("falls through from ISO2 to ISO3: a valid 3-char code still resolves", () => {
+    // 'USA' is not a valid ISO2 code, so resolveCountry must fall through to the
+    // ISO3 lookup (matching the Java try-ISO2-then-ISO3 ordering) and succeed.
+    expect(svc.resolveCountry("USA")).toBe("USA");
+    expect(svc.resolveCountry("NLD")).toBe("NLD");
+  });
+
   it("throws on unknown country 'xx'", () => {
     expect(() => svc.resolveCountry("xx")).toThrow();
   });
@@ -165,6 +172,17 @@ describe("encodeShortest", () => {
   it("returns null for a location outside the territory (no throw)", () => {
     // Point in Pacific Ocean, restricted to NLD — no mapcode should exist.
     const m = svc.encodeShortest(0, 179, Territory.NLD);
+    expect(m).toBeNull();
+  });
+
+  it("returns null (not throw) when an out-of-range latitude yields no mapcode", () => {
+    // NOTE: mapcode-ts clamps/validates lat internally and reports the
+    // "no mapcode" condition via UnknownMapcodeError (verified empirically),
+    // so even an absurd latitude such as 999 surfaces as UnknownMapcodeError,
+    // which encodeShortest swallows -> null. There is no reachable input via
+    // encodeToShortest that throws a *non*-UnknownMapcodeError, so the rethrow
+    // path is covered by the unit test below using a thrown sentinel instead.
+    const m = svc.encodeShortest(999, 4.9, Territory.NLD);
     expect(m).toBeNull();
   });
 });

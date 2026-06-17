@@ -46,8 +46,9 @@ export {
 
 export interface MapcodeService {
   /**
-   * Resolve a territory string (case-insensitive, '-'/'_' normalized) with optional parent
-   * disambiguation. Ports the Java `resolveTerritory` + `getTerritoryAlias` algorithm faithfully.
+   * Resolve a territory string (uppercased) with optional parent disambiguation. The optional
+   * parent string is additionally '-' → '_' normalized before being resolved as a context.
+   * Ports the Java `resolveTerritory` + `getTerritoryAlias` algorithm faithfully.
    * Throws if the territory cannot be resolved.
    */
   resolveTerritory(territory: string, parent: string | null): Territory;
@@ -197,23 +198,20 @@ function resolveAlphabet(name: string): Alphabet {
 // ---------------------------------------------------------------------------
 
 function resolveCountry(code: string): string {
-  const upper = code.toUpperCase();
-  // Try ISO2 first (2-char codes), then ISO3 (3-char codes).
-  if (upper.length === 2) {
-    const iso2Codes = Territory.allCountryISO2Codes();
-    if (iso2Codes.has(upper)) {
-      return code;
-    }
-    throw new Error(`Unknown country ISO2 code: '${code}'`);
+  // Match the Java service: try ISO2 first, then ISO3 on failure; never branch on length.
+  try {
+    Territory.fromCountryISO2(code);
+    return code;
+  } catch {
+    // Not a valid ISO2 code; fall through to ISO3.
   }
-  if (upper.length === 3) {
-    const iso3Codes = Territory.allCountryISO3Codes();
-    if (iso3Codes.has(upper)) {
-      return code;
-    }
-    throw new Error(`Unknown country ISO3 code: '${code}'`);
+  try {
+    Territory.fromCountryISO3(code);
+    return code;
+  } catch {
+    // Not a valid ISO3 code either.
   }
-  throw new Error(`Invalid country code length for '${code}': must be 2 or 3 characters`);
+  throw new Error(`Unknown country code: '${code}'`);
 }
 
 // ---------------------------------------------------------------------------
@@ -226,7 +224,6 @@ const HTML_NAMED_ENTITIES: Record<string, string> = {
   gt: ">",
   quot: '"',
   apos: "'",
-  nbsp: " ",
 };
 
 function htmlUnescape(s: string): string {
@@ -266,11 +263,12 @@ export function createMapcodeService(): MapcodeService {
       try {
         return encodeToShortest(lat, lon, territory);
       } catch (err) {
+        // Match the Java service: only UnknownMapcodeException is swallowed
+        // (no mapcode for this location/territory); any other error propagates.
         if (err instanceof UnknownMapcodeError) {
           return null;
         }
-        // For other errors (e.g. point outside territory), also return null
-        return null;
+        throw err;
       }
     },
 
