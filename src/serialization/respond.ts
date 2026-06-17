@@ -38,6 +38,27 @@ export function respond(
 }
 
 /**
+ * Send a bare top-level list DTO (e.g. MapcodeListDTO). In JSON this is a bare
+ * array `[...]`; in XML the items are wrapped in the schema's root element using
+ * the (unwrapped) objectList described by schema.xmlOrder[0].
+ */
+export function respondList(
+  reply: FastifyReply,
+  format: OutputFormat,
+  items: Record<string, unknown>[],
+  schema: Schema
+): FastifyReply {
+  if (format === "xml") {
+    // Re-use the object serializer with a wrapper holding the list under the
+    // single (objectListUnwrapped) field declared in xmlOrder.
+    const field = schema.xmlOrder[0];
+    const wrapper = { [field.name]: items };
+    return reply.code(200).header("content-type", XML_CT).send(toXml(wrapper, schema));
+  }
+  return reply.code(200).header("content-type", JSON_CT).send(toJson(items, schema));
+}
+
+/**
  * Send an error body in the negotiated format.
  * JSON: {"message":<msg>,"status":<code>}
  * XML:  <?xml version="1.0" encoding="UTF-8" standalone="yes"?><exception><message>..</message><status>..</status></exception>

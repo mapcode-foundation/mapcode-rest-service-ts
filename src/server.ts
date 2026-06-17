@@ -20,6 +20,7 @@ import { resolveFormat } from "./routes/negotiation.ts";
 import { respondError } from "./serialization/respond.ts";
 import { registerRootRoutes } from "./routes/root.routes.ts";
 import { registerCoordsRoutes } from "./routes/coords.routes.ts";
+import { registerCodesRoutes } from "./routes/codes.routes.ts";
 
 // ---------------------------------------------------------------------------
 // ServerDeps — passed to all route modules
@@ -78,8 +79,8 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // -------------------------------------------------------------------------
   registerRootRoutes(app, deps);
   registerCoordsRoutes(app, deps);
+  registerCodesRoutes(app, deps);
   // Future route modules are added here:
-  // registerCodesRoutes(app, deps);
   // registerTerritoriesRoutes(app, deps);
   // registerAlphabetsRoutes(app, deps);
 

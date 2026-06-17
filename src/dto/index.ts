@@ -393,11 +393,14 @@ export function buildTerritories(f: TerritoriesFields): Record<string, unknown> 
 export const territoryCandidatesSchema: Schema = {
   rootName: "territories",
   jsonOrder: [
-    { name: "territories", type: { kind: "objectList", itemName: "territoryCandidate", schema: territoryCandidateSchema } },
+    // emitEmpty: standalone TerritoryCandidatesDTO has no @JsonInclude(NON_EMPTY),
+    // so an empty candidate list serialises as "territories":[] (not omitted).
+    { name: "territories", type: { kind: "objectList", itemName: "territoryCandidate", schema: territoryCandidateSchema }, emitEmpty: true },
   ],
-  // XML: items directly inside root (JAXB @XmlElement without @XmlElementWrapper).
+  // XML: items directly inside root as <territoryCandidate> (JAXB @XmlElement
+  // without @XmlElementWrapper).
   xmlOrder: [
-    { name: "territories", type: { kind: "objectListUnwrapped", itemName: "territory", schema: territoryCandidateSchema } },
+    { name: "territories", type: { kind: "objectListUnwrapped", itemName: "territoryCandidate", schema: territoryCandidateSchema } },
   ],
 };
 

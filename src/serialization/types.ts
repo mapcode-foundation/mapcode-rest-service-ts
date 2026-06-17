@@ -25,6 +25,12 @@ export type FieldType =
 export interface Field {
   name: string;
   type: FieldType;
+  /**
+   * When true, an empty array value is emitted explicitly (JSON `[]`) instead of
+   * being omitted. Mirrors a JAXB/Jackson list field WITHOUT @JsonInclude(NON_EMPTY),
+   * e.g. TerritoryCandidatesDTO.territories.
+   */
+  emitEmpty?: boolean;
 }
 
 export interface Schema {

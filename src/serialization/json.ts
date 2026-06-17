@@ -20,6 +20,10 @@ function isEmpty(v: unknown): boolean {
 }
 
 function fieldJson(value: unknown, field: Field): string | null {
+  // Honor emitEmpty: an empty array is rendered as "[]" rather than omitted.
+  if (field.emitEmpty && Array.isArray(value) && value.length === 0) {
+    return "[]";
+  }
   if (isEmpty(value)) return null;
   switch (field.type.kind) {
     case "string": return JSON.stringify(value);
