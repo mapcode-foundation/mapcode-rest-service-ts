@@ -44,6 +44,36 @@ describe("GET /mapcode/status", () => {
   });
 });
 
+describe("forbidden missing-path errors", () => {
+  it("returns the Java-compatible JSON error envelope for /mapcode/codes", async () => {
+    const res = await app.inject({ method: "GET", url: "/mapcode/codes" });
+    const body = JSON.parse(res.body);
+
+    expect(res.statusCode).toBe(403);
+    expect(body).toMatchObject({
+      message: "ApiForbiddenException; Missing URL path parameters: /{lat,lon}/{mapcodes|local|international}",
+      errors: null,
+    });
+    expect(body.status).toBeUndefined();
+    expect(body.reference).toMatch(/^REF-[0-9A-F-]+-X$/);
+    expect(body.time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  });
+
+  it("returns the Java-compatible JSON error envelope for /mapcode/coords", async () => {
+    const res = await app.inject({ method: "GET", url: "/mapcode/coords" });
+    const body = JSON.parse(res.body);
+
+    expect(res.statusCode).toBe(403);
+    expect(body).toMatchObject({
+      message: "ApiForbiddenException; Missing URL path parameters: /{mapcode}",
+      errors: null,
+    });
+    expect(body.status).toBeUndefined();
+    expect(body.reference).toMatch(/^REF-[0-9A-F-]+-X$/);
+    expect(body.time).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+  });
+});
+
 describe("GET /mapcode (help)", () => {
   it("returns 200 and body starts with <html>", async () => {
     const res = await app.inject({ method: "GET", url: "/mapcode" });

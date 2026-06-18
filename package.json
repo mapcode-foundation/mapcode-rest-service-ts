@@ -1,6 +1,6 @@
 {
   "name": "mapcode-rest-service-ts",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "TypeScript port of the Mapcode REST API service.",
   "type": "module",
   "engines": {

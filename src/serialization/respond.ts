@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import type { FastifyReply } from "fastify";
+import { randomUUID } from "node:crypto";
 import type { Schema } from "./types.ts";
 import type { OutputFormat } from "../routes/negotiation.ts";
 import { toJson } from "./json.ts";
@@ -74,6 +75,15 @@ export function respondError(
       `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
       `<exception><message>${escapeXml(message)}</message><status>${httpStatus}</status></exception>`;
     return reply.code(httpStatus).header("content-type", XML_CT).send(body);
+  }
+  if (httpStatus === 403) {
+    const body = {
+      message: `ApiForbiddenException; ${message}`,
+      reference: `REF-${randomUUID().toUpperCase()}-X`,
+      time: new Date().toISOString().replace(/\.\d{3}Z$/, "Z"),
+      errors: null,
+    };
+    return reply.code(httpStatus).header("content-type", JSON_CT).send(JSON.stringify(body));
   }
   const body = `{"message":${JSON.stringify(message)},"status":${httpStatus}}`;
   return reply.code(httpStatus).header("content-type", JSON_CT).send(body);
