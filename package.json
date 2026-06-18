@@ -1,6 +1,6 @@
 {
   "name": "mapcode-rest-service-ts",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "TypeScript port of the Mapcode REST API service.",
   "type": "module",
   "engines": {
@@ -19,7 +19,7 @@
     "fastify": "^5.2.0",
     "flatbush": "^4.4.0",
     "flatgeobuf": "^3.36.0",
-    "mapcode-ts": "file:../mapcode-ts"
+    "mapcode-ts": "1.0.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

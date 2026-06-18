@@ -6,7 +6,8 @@ originally a Java/Guice/Jersey application). It exposes the **same HTTP API** �
 same paths, same query parameters, the same JSON and XML byte-for-byte
 serialization, and the same error semantics — implemented on
 [Fastify](https://fastify.dev/) over the
-[`mapcode-ts`](../mapcode-ts) encoding/decoding library.
+[`mapcode-ts`](https://www.npmjs.com/package/mapcode-ts) encoding/decoding
+library.
 
 The Java deployment/CLI machinery (Guice modules, command-line bootstrap,
 request logging/tracing) was intentionally dropped from this port; the
@@ -17,9 +18,8 @@ compatibility.
 
 - **Node.js ≥ 20** (uses ESM, native `--env-file`, and `--experimental-strip-types`
   to run TypeScript directly in `dev`).
-- The [`mapcode-ts`](../mapcode-ts) library, consumed as a **local `file:`
-  dependency** (`"mapcode-ts": "file:../mapcode-ts"`). It must be present as a
-  sibling directory.
+- The [`mapcode-ts`](https://www.npmjs.com/package/mapcode-ts) library,
+  installed from npm.
 - A **borders FlatGeobuf file** (`borders.fgb`) for the boundary/territory
   lookups (see below).
 
@@ -28,9 +28,6 @@ compatibility.
 ```bash
 npm install
 ```
-
-Because `mapcode-ts` is a `file:` dependency, the sibling `../mapcode-ts`
-directory must exist and be built before installing.
 
 ## The borders file (`borders.fgb`)
 
@@ -87,9 +84,9 @@ Run the built server:
 ```bash
 npm run build
 MAPCODE_BORDERS_PATH=/path/to/borders.fgb node --env-file=.env dist/index.js
-# → mapcode-rest-service-ts listening on :8080 (version 1.0.1)
+# → mapcode-rest-service-ts listening on :8080 (version 1.0.3)
 curl localhost:8080/mapcode/version
-# {"version":"1.0.1"}
+# {"version":"1.0.3"}
 ```
 
 ## API
