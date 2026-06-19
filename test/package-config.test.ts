@@ -24,4 +24,9 @@ describe("package dependency configuration", () => {
     expect(packageLock.packages[""].dependencies["mapcode-ts"]).not.toMatch(/^file:/);
     expect(packageLock.packages["node_modules/mapcode-ts"].resolved).not.toMatch(/^\.\./);
   });
+
+  it("does not require Node's --env-file flag for runtime startup", () => {
+    expect(packageJson.scripts.start).toBe("node dist/index.js");
+    expect(packageJson.scripts.dev).not.toContain("--env-file");
+  });
 });

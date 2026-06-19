@@ -12,12 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { loadConfig } from "./config.ts";
+import { loadConfig, loadEnvFileIfExists } from "./config.ts";
 import { BoundaryService } from "./domain/boundary-service.ts";
 import { createMapcodeService } from "./domain/mapcode-service.ts";
 import { buildServer } from "./server.ts";
 
 async function main(): Promise<void> {
+  loadEnvFileIfExists();
   const config = loadConfig();
   const boundaryService = await BoundaryService.load(config.bordersPath);
   const mapcodeService = createMapcodeService();

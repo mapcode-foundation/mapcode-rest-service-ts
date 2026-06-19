@@ -16,8 +16,8 @@ compatibility.
 
 ## Requirements
 
-- **Node.js ≥ 20** (uses ESM, native `--env-file`, and `--experimental-strip-types`
-  to run TypeScript directly in `dev`).
+- **Node.js ≥ 20** for the built service. `npm run dev` runs TypeScript directly
+  with Node's type stripping and needs Node.js ≥ 22.6.0.
 - The [`mapcode-ts`](https://www.npmjs.com/package/mapcode-ts) library,
   installed from npm.
 - A **borders FlatGeobuf file** (`borders.fgb`) for the boundary/territory
@@ -59,8 +59,10 @@ Configuration is read from environment variables (via `src/config.ts`):
 | `PORT` | `8080` | TCP port to listen on. |
 | `VERSION` | `package.json` version | Version string returned by `/mapcode/version`. |
 
-A `.env` file is supported via Node's native `--env-file` flag (used by the
-`dev` and `start` scripts). For example:
+A `.env` file is optional. If present, it is loaded at startup before
+configuration is read. Existing environment variables take precedence over
+values in `.env`, so deployment-provided settings are not overwritten. For
+example:
 
 ```dotenv
 # .env
@@ -71,9 +73,9 @@ PORT=8080
 ## Scripts
 
 ```bash
-npm run dev        # run src/index.ts directly (--experimental-strip-types, --env-file=.env)
+npm run dev        # run src/index.ts directly (--experimental-strip-types)
 npm run build      # tsc → dist/ (relative .ts imports rewritten to .js)
-npm start          # node --env-file=.env dist/index.js
+npm start          # node dist/index.js
 npm test           # vitest run (full suite)
 npm run test:watch # vitest in watch mode
 npm run typecheck  # tsc --noEmit
@@ -83,7 +85,7 @@ Run the built server:
 
 ```bash
 npm run build
-MAPCODE_BORDERS_PATH=/path/to/borders.fgb node --env-file=.env dist/index.js
+MAPCODE_BORDERS_PATH=/path/to/borders.fgb node dist/index.js
 # → mapcode-rest-service-ts listening on :8080 (version 1.0.3)
 curl localhost:8080/mapcode/version
 # {"version":"1.0.3"}

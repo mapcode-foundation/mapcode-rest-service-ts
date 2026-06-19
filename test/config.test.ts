@@ -12,8 +12,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { describe, it, expect } from "vitest";
-import { loadConfig } from "../src/config.ts";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, it, expect } from "vitest";
+import { loadConfig, loadEnvFileIfExists } from "../src/config.ts";
+
+const tempDirs: string[] = [];
+
+function writeEnvFile(contents: string): string {
+  const dir = mkdtempSync(join(tmpdir(), "mapcode-env-"));
+  tempDirs.push(dir);
+  const envPath = join(dir, ".env");
+  writeFileSync(envPath, contents);
+  return envPath;
+}
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe("loadConfig", () => {
   it("parses port, bordersPath and version", () => {
@@ -39,5 +58,36 @@ describe("loadConfig", () => {
   it("rejects PORT values outside the listenable range", () => {
     expect(() => loadConfig({ PORT: "-1", MAPCODE_BORDERS_PATH: "/x/b.fgb" })).toThrow(/PORT/);
     expect(() => loadConfig({ PORT: "65536", MAPCODE_BORDERS_PATH: "/x/b.fgb" })).toThrow(/PORT/);
+  });
+});
+
+describe("loadEnvFileIfExists", () => {
+  it("loads values from an existing .env file", () => {
+    const env: NodeJS.ProcessEnv = {};
+    const envPath = writeEnvFile("MAPCODE_BORDERS_PATH=/from-file\nPORT=8081\n");
+
+    expect(loadEnvFileIfExists(envPath, env)).toBe(true);
+
+    expect(env.MAPCODE_BORDERS_PATH).toBe("/from-file");
+    expect(env.PORT).toBe("8081");
+  });
+
+  it("keeps deployment-provided variables ahead of .env file values", () => {
+    const env: NodeJS.ProcessEnv = { MAPCODE_BORDERS_PATH: "/from-deployment", PORT: "0" };
+    const envPath = writeEnvFile("MAPCODE_BORDERS_PATH=/from-file\nPORT=8081\n");
+
+    expect(loadEnvFileIfExists(envPath, env)).toBe(true);
+
+    expect(env.MAPCODE_BORDERS_PATH).toBe("/from-deployment");
+    expect(env.PORT).toBe("0");
+  });
+
+  it("ignores a missing .env file", () => {
+    const env: NodeJS.ProcessEnv = {};
+    const dir = mkdtempSync(join(tmpdir(), "mapcode-env-"));
+    tempDirs.push(dir);
+
+    expect(loadEnvFileIfExists(join(dir, ".env"), env)).toBe(false);
+    expect(env).toEqual({});
   });
 });
