@@ -4,8 +4,3 @@ dist/
 .env
 *.log
 .DS_Store
-
-.claude/worktrees/
-
-# Large borders data files (environment-provided, produced by the Java tools/ pipeline)
-data/*.fgb
