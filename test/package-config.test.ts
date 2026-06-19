@@ -20,9 +20,9 @@ const packageLock = JSON.parse(readFileSync(new URL("../package-lock.json", impo
 
 describe("package dependency configuration", () => {
   it("keeps package metadata at the release version", () => {
-    expect(packageJson.version).toBe("2.4.19.3");
-    expect(packageLock.version).toBe("2.4.19.3");
-    expect(packageLock.packages[""].version).toBe("2.4.19.3");
+    expect(packageJson.version).toBe("2.5.0");
+    expect(packageLock.version).toBe("2.5.0");
+    expect(packageLock.packages[""].version).toBe("2.5.0");
   });
 
   it("uses a registry-resolvable mapcode-ts dependency", () => {

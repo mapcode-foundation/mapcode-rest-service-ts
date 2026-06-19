@@ -44,7 +44,7 @@ export interface ServerDeps {
 // ---------------------------------------------------------------------------
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
-  const app = Fastify({ logger: false });
+  const app = Fastify({ logger: false, routerOptions: { ignoreTrailingSlash: true } });
 
   // -------------------------------------------------------------------------
   // Error handler
