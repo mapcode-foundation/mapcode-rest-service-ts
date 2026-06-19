@@ -124,8 +124,17 @@ prefixes force XML / JSON regardless of the `Accept` header.
   `count` (default 1000; **negative → 400**), `client`, `allowLog`.
 - `/territories/{territory}`: `context` (disambiguation), `client`, `allowLog`.
 
-`client` and `allowLog` are accepted and ignored (kept for API compatibility;
-no tracing).
+`client` and `allowLog` are accepted and ignored (kept for API compatibility).
+The running service logs incoming requests at info level and handled warnings or
+errors at their corresponding levels.
+
+## Logging
+
+The production entrypoint enables Fastify's structured JSON logger at info level.
+Each REST call emits Fastify's standard `incoming request` and `request completed`
+entries. Handled API errors, unknown routes, and unsupported methods are logged
+at warn level. Unexpected request errors are logged at error level with the
+serialized error attached.
 
 ### Notes on behavior
 

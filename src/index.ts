@@ -22,7 +22,12 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const boundaryService = await BoundaryService.load(config.bordersPath);
   const mapcodeService = createMapcodeService();
-  const app = buildServer({ mapcodeService, boundaryService, version: config.version });
+  const app = buildServer({
+    mapcodeService,
+    boundaryService,
+    version: config.version,
+    logger: { level: "info" },
+  });
   await app.listen({ port: config.port, host: "0.0.0.0" });
   console.log(`mapcode-rest-service-ts listening on :${config.port} (version ${config.version})`);
 }

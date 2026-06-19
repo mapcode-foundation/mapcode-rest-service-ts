@@ -12,7 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import Fastify, { type FastifyInstance, type FastifyRequest, type FastifyReply } from "fastify";
+import Fastify, {
+  type FastifyInstance,
+  type FastifyRequest,
+  type FastifyReply,
+  type FastifyServerOptions,
+} from "fastify";
 import type { MapcodeService } from "./domain/mapcode-service.ts";
 import type { BoundaryService } from "./domain/boundary-service.ts";
 import { ApiError } from "./errors.ts";
@@ -32,6 +37,7 @@ export interface ServerDeps {
   mapcodeService: MapcodeService;
   boundaryService: BoundaryService;
   version: string;
+  logger?: FastifyServerOptions["logger"];
 }
 
 // ---------------------------------------------------------------------------
@@ -44,7 +50,7 @@ export interface ServerDeps {
 // ---------------------------------------------------------------------------
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
-  const app = Fastify({ logger: false, routerOptions: { ignoreTrailingSlash: true } });
+  const app = Fastify({ logger: deps.logger ?? false, routerOptions: { ignoreTrailingSlash: true } });
 
   // -------------------------------------------------------------------------
   // Error handler
@@ -52,8 +58,20 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   app.setErrorHandler((error: Error, request: FastifyRequest, reply: FastifyReply) => {
     const { format } = resolveFormat(request.url, request.headers.accept);
     if (error instanceof ApiError) {
+      request.log.warn({
+        err: error,
+        method: request.method,
+        url: request.url,
+        statusCode: error.httpStatus,
+      }, "api request failed");
       return respondError(reply, format, error.httpStatus, error.message);
     }
+    request.log.error({
+      err: error,
+      method: request.method,
+      url: request.url,
+      statusCode: 500,
+    }, "unexpected request error");
     return respondError(reply, format, 500, error.message ?? "Internal Server Error");
   });
 
@@ -62,6 +80,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // -------------------------------------------------------------------------
   app.setNotFoundHandler((request: FastifyRequest, reply: FastifyReply) => {
     const { format } = resolveFormat(request.url, request.headers.accept);
+    request.log.warn({
+      method: request.method,
+      url: request.url,
+      statusCode: 404,
+    }, "route not found");
     return respondError(reply, format, 404, `Route not found: ${request.method} ${request.url}`);
   });
 
@@ -72,6 +95,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     const method = request.method.toUpperCase();
     if (method !== "GET" && method !== "HEAD") {
       const { format } = resolveFormat(request.url, request.headers.accept);
+      request.log.warn({
+        method: request.method,
+        url: request.url,
+        statusCode: 405,
+      }, "method not allowed");
       return respondError(reply, format, 405, `Method not allowed: ${request.method}`);
     }
   });
