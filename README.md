@@ -1,4 +1,4 @@
-# mapcode-rest-service-ts
+# README for Mapcode REST API Web Services
 
 A TypeScript port of the Mapcode REST service
 ([mapcode-rest-service](https://github.com/mapcode-foundation/mapcode-rest-service),
@@ -9,10 +9,9 @@ serialization, and the same error semantics — implemented on
 [`mapcode-ts`](https://www.npmjs.com/package/mapcode-ts) encoding/decoding
 library.
 
-The Java deployment/CLI machinery (Guice modules, command-line bootstrap,
-request logging/tracing) was intentionally dropped from this port; the
-`client` and `allowLog` query parameters are still accepted and ignored for API
-compatibility.
+Compared with the original Java service, this port is built for operational
+simplicity: it runs with a smaller memory footprint, can sustain higher request
+loads, and is easier to package and deploy as a Node.js service.
 
 ## Requirements
 
@@ -86,9 +85,9 @@ Run the built server:
 ```bash
 npm run build
 MAPCODE_BORDERS_PATH=/path/to/borders.fgb node dist/index.js
-# → mapcode-rest-service-ts listening on :8080 (version 1.0.3)
+# → mapcode-rest-service-ts listening on :8080 (version 2.4.19.3)
 curl localhost:8080/mapcode/version
-# {"version":"1.0.3"}
+# {"version":"2.4.19.3"}
 ```
 
 ## API
@@ -99,7 +98,7 @@ prefixes force XML / JSON regardless of the `Accept` header.
 
 | Method & path | Behavior |
 |---|---|
-| `GET /mapcode` | HTML help page (`<html><pre>MAPCODE API (<version>)…</pre></html>`). |
+| `GET /mapcode` | HTML help page (`<html><pre>MAPCODE API (<version>) (optimized version)…</pre></html>`). |
 | `GET /mapcode/version` | `VersionDTO` `{version}`. |
 | `GET /mapcode/status` | Round-trip encode/decode self-check; 200 if OK, else 500. |
 | `GET /mapcode/codes` | **403** (missing path params). |

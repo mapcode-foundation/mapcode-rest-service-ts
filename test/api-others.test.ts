@@ -80,6 +80,12 @@ describe("GET /mapcode (help)", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toMatch(/^<html>/);
   });
+
+  it("marks the help header as the optimized version", async () => {
+    const res = await app.inject({ method: "GET", url: "/mapcode" });
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("MAPCODE API (1.0) (optimized version)");
+  });
 });
 
 describe("GET /mapcode/version — JSON", () => {

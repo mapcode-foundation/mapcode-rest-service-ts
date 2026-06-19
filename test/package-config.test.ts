@@ -19,6 +19,12 @@ const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.me
 const packageLock = JSON.parse(readFileSync(new URL("../package-lock.json", import.meta.url), "utf8"));
 
 describe("package dependency configuration", () => {
+  it("keeps package metadata at the release version", () => {
+    expect(packageJson.version).toBe("2.4.19.3");
+    expect(packageLock.version).toBe("2.4.19.3");
+    expect(packageLock.packages[""].version).toBe("2.4.19.3");
+  });
+
   it("uses a registry-resolvable mapcode-ts dependency", () => {
     expect(packageJson.dependencies["mapcode-ts"]).not.toMatch(/^file:/);
     expect(packageLock.packages[""].dependencies["mapcode-ts"]).not.toMatch(/^file:/);

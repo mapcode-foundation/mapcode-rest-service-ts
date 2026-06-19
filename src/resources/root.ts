@@ -179,7 +179,7 @@ So, the following methods are supported as well and return XML or JSON by defaul
 
 /** Return the HTML help page wrapping HELP_TEXT. */
 export function getHelpHtml(version: string): string {
-  return `<html><pre>\nMAPCODE API (${version})\n-----------\n\n${HELP_TEXT}</pre></html>\n`;
+  return `<html><pre>\nMAPCODE API (${version}) (optimized version)\n-----------\n\n${HELP_TEXT}</pre></html>\n`;
 }
 
 /** Return a VersionDTO value for the given version string. */
