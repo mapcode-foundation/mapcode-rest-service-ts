@@ -1,5 +1,7 @@
 # README for Mapcode REST API Web Services
 
+**Copyright (C) 2014-2026 Stichting Mapcode Foundation (http://www.mapcode.com)**
+
 A TypeScript port of the Mapcode REST service
 ([mapcode-rest-service](https://github.com/mapcode-foundation/mapcode-rest-service),
 originally a Java/Guice/Jersey application). It exposes the **same HTTP API** —
