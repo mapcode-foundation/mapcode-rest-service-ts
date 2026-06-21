@@ -42,7 +42,7 @@ Point the service at it with the **`MAPCODE_BORDERS_PATH`** environment
 variable (required — the service refuses to start without it):
 
 ```bash
-MAPCODE_BORDERS_PATH=/path/to/borders.fgb
+MAPCODE_BORDERS_PATH=./data//borders.fgb
 ```
 
 The production `borders.fgb` (~22 MB) is produced by the Java repository's
@@ -67,7 +67,7 @@ example:
 
 ```dotenv
 # .env
-MAPCODE_BORDERS_PATH=../mapcode-rest-service/resources/src/main/resources/borders.fgb
+MAPCODE_BORDERS_PATH=./data/borders.fgb
 PORT=8080
 ```
 
@@ -86,7 +86,7 @@ Run the built server:
 
 ```bash
 npm run build
-MAPCODE_BORDERS_PATH=/path/to/borders.fgb node dist/index.js
+MAPCODE_BORDERS_PATH=./data//borders.fgb node dist/index.js
 # → mapcode-rest-service-ts listening on :8080 (version 2.4.19.3)
 curl localhost:8080/mapcode/version
 # {"version":"2.4.19.3"}
