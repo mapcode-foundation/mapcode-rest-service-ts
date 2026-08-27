@@ -30,6 +30,8 @@ import { registerTerritoriesRoutes } from "./routes/territories.routes.ts";
 import { registerAlphabetsRoutes } from "./routes/alphabets.routes.ts";
 import { createRecordingHook } from "./routes/recording.ts";
 import type { RequestRecorder } from "./storage/request-recorder.ts";
+import { registerReplayRoutes } from "./routes/replay.routes.ts";
+import type { ReplayQueryFn } from "./storage/replay-query.ts";
 
 // ---------------------------------------------------------------------------
 // ServerDeps — passed to all route modules
@@ -42,6 +44,8 @@ export interface ServerDeps {
   logger?: FastifyServerOptions["logger"];
   /** Optional request recorder; absent → no recording hook is installed. */
   recorder?: RequestRecorder;
+  /** Replay endpoint config; absent → /mapcode/replay is not registered. */
+  replay?: { token: string; query: ReplayQueryFn };
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +107,11 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // -------------------------------------------------------------------------
   app.addHook("onRequest", async (request: FastifyRequest, reply: FastifyReply) => {
     const method = request.method.toUpperCase();
+    // The replay CORS preflight is the one permitted non-GET request.
+    if (method === "OPTIONS" && deps.replay !== undefined) {
+      const path = request.url.split("?")[0].replace(/\/+$/, "");
+      if (path === "/mapcode/replay") return;
+    }
     if (method !== "GET" && method !== "HEAD") {
       const { format } = resolveFormat(request.url, request.headers.accept);
       request.log.warn({
@@ -122,6 +131,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerCodesRoutes(app, deps);
   registerTerritoriesRoutes(app, deps);
   registerAlphabetsRoutes(app, deps);
+  registerReplayRoutes(app, deps);
 
   return app;
 }

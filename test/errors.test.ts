@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   ApiError, ApiInvalidFormatError, ApiNotFoundError,
   ApiForbiddenError, ApiConflictError, ApiIntegerOutOfRangeError,
+  ApiUnauthorizedError,
 } from "../src/errors.ts";
 
 describe("ApiError hierarchy", () => {
@@ -23,5 +24,15 @@ describe("ApiError hierarchy", () => {
     const e = new ApiInvalidFormatError("lat", "x", "[-90, 90]");
     expect(e.message).toContain("lat");
     expect(e.message).toContain("[-90, 90]");
+  });
+});
+
+describe("ApiUnauthorizedError", () => {
+  it("is an ApiError with status 401", () => {
+    const err = new ApiUnauthorizedError("Missing or invalid Bearer token");
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.httpStatus).toBe(401);
+    expect(err.message).toBe("Missing or invalid Bearer token");
+    expect(err.name).toBe("ApiUnauthorizedError");
   });
 });

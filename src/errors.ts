@@ -44,3 +44,7 @@ export class ApiIntegerOutOfRangeError extends ApiError {
     super(400, `Value out of range for '${field}': ${value}, expected: [${min}, ${max}]`);
   }
 }
+
+export class ApiUnauthorizedError extends ApiError {
+  constructor(message: string) { super(401, message); }
+}
