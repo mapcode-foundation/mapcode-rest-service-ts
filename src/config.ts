@@ -19,6 +19,12 @@ export interface Config {
   port: number;
   bordersPath: string;
   version: string;
+  /** Postgres connection string; null → recording disabled, no replay route. */
+  dbUrl: string | null;
+  /** Bearer token for GET /mapcode/replay; required whenever dbUrl is set. */
+  replayToken: string | null;
+  /** PEM of the CA certificate for verified TLS to the database. */
+  dbCaCert: string | null;
 }
 
 function packageVersion(): string {
@@ -104,5 +110,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   const port = parsePort(env.PORT?.trim());
   const version = (env.VERSION ?? "").trim() || packageVersion();
-  return { port, bordersPath, version };
+  const dbUrl = (env.MAPCODE_DB_URL ?? "").trim() || null;
+  const replayToken = (env.MAPCODE_REPLAY_TOKEN ?? "").trim() || null;
+  const dbCaCert = (env.MAPCODE_DB_CA_CERT ?? "").trim() || null;
+  // Fail closed: collected data must never be servable without authentication.
+  if (dbUrl !== null && replayToken === null) {
+    throw new Error("MAPCODE_REPLAY_TOKEN is required when MAPCODE_DB_URL is set.");
+  }
+  return { port, bordersPath, version, dbUrl, replayToken, dbCaCert };
 }

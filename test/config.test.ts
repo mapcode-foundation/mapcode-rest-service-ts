@@ -37,7 +37,14 @@ afterEach(() => {
 describe("loadConfig", () => {
   it("parses port, bordersPath and version", () => {
     const cfg = loadConfig({ PORT: "9090", MAPCODE_BORDERS_PATH: "/x/b.fgb", VERSION: "1.0" });
-    expect(cfg).toEqual({ port: 9090, bordersPath: "/x/b.fgb", version: "1.0" });
+    expect(cfg).toEqual({
+      port: 9090,
+      bordersPath: "/x/b.fgb",
+      version: "1.0",
+      dbUrl: null,
+      replayToken: null,
+      dbCaCert: null,
+    });
   });
 
   it("defaults port to 8080 and version to a non-empty string", () => {
@@ -58,6 +65,45 @@ describe("loadConfig", () => {
   it("rejects PORT values outside the listenable range", () => {
     expect(() => loadConfig({ PORT: "-1", MAPCODE_BORDERS_PATH: "/x/b.fgb" })).toThrow(/PORT/);
     expect(() => loadConfig({ PORT: "65536", MAPCODE_BORDERS_PATH: "/x/b.fgb" })).toThrow(/PORT/);
+  });
+
+  it("defaults dbUrl, replayToken and dbCaCert to null", () => {
+    const cfg = loadConfig({ MAPCODE_BORDERS_PATH: "/x/b.fgb" });
+    expect(cfg.dbUrl).toBeNull();
+    expect(cfg.replayToken).toBeNull();
+    expect(cfg.dbCaCert).toBeNull();
+  });
+
+  it("parses MAPCODE_DB_URL, MAPCODE_REPLAY_TOKEN and MAPCODE_DB_CA_CERT", () => {
+    const cfg = loadConfig({
+      MAPCODE_BORDERS_PATH: "/x/b.fgb",
+      MAPCODE_DB_URL: "postgres://u:p@h:5432/db?sslmode=require",
+      MAPCODE_REPLAY_TOKEN: "secret-token",
+      MAPCODE_DB_CA_CERT: "-----BEGIN CERTIFICATE-----",
+    });
+    expect(cfg.dbUrl).toBe("postgres://u:p@h:5432/db?sslmode=require");
+    expect(cfg.replayToken).toBe("secret-token");
+    expect(cfg.dbCaCert).toBe("-----BEGIN CERTIFICATE-----");
+  });
+
+  it("treats empty/whitespace MAPCODE_DB_URL as absent", () => {
+    const cfg = loadConfig({ MAPCODE_BORDERS_PATH: "/x/b.fgb", MAPCODE_DB_URL: "  " });
+    expect(cfg.dbUrl).toBeNull();
+  });
+
+  it("fails closed: MAPCODE_DB_URL without MAPCODE_REPLAY_TOKEN throws", () => {
+    expect(() =>
+      loadConfig({
+        MAPCODE_BORDERS_PATH: "/x/b.fgb",
+        MAPCODE_DB_URL: "postgres://u:p@h:5432/db",
+      })
+    ).toThrow(/MAPCODE_REPLAY_TOKEN/);
+  });
+
+  it("accepts MAPCODE_REPLAY_TOKEN without MAPCODE_DB_URL (recording simply disabled)", () => {
+    const cfg = loadConfig({ MAPCODE_BORDERS_PATH: "/x/b.fgb", MAPCODE_REPLAY_TOKEN: "t" });
+    expect(cfg.dbUrl).toBeNull();
+    expect(cfg.replayToken).toBe("t");
   });
 });
 
