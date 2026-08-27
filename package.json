@@ -19,10 +19,12 @@
     "fastify": "^5.2.0",
     "flatbush": "^4.4.0",
     "flatgeobuf": "^3.36.0",
-    "mapcode-ts": "1.0.1"
+    "mapcode-ts": "1.0.1",
+    "pg": "^8.23.0"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.23.1",
     "typescript": "^5.8.3",
     "vitest": "^4.1.9"
   }
