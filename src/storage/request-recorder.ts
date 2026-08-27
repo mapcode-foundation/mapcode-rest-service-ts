@@ -110,7 +110,10 @@ export function createRequestRecorder(pool: RecorderPool | null, options: Record
 
   // Serialize flushes: concurrent callers join the same chain.
   const flush = (): Promise<void> => {
-    pending = pending.then(drain);
+    pending = pending.then(drain).catch(() => {
+      // drain() already contains its own error handling; this guard only
+      // keeps a throwing warn callback from poisoning the chain forever.
+    });
     return pending;
   };
 

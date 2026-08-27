@@ -59,6 +59,9 @@ Configuration is read from environment variables (via `src/config.ts`):
 | `MAPCODE_BORDERS_PATH` | _(required)_ | Path to the `borders.fgb` file. |
 | `PORT` | `8080` | TCP port to listen on. |
 | `VERSION` | `package.json` version | Version string returned by `/mapcode/version`. |
+| `MAPCODE_DB_URL` | _(unset)_ | Optional Postgres connection string. When unset, request recording is disabled and `/mapcode/replay` is not registered. Contains credentials — never logged. |
+| `MAPCODE_REPLAY_TOKEN` | _(unset)_ | Bearer token for `GET /mapcode/replay`. **Required whenever `MAPCODE_DB_URL` is set** — the service refuses to start without it (fail closed). |
+| `MAPCODE_DB_CA_CERT` | _(unset)_ | Optional PEM of the database CA certificate, for verified TLS to Postgres. A multi-line PEM cannot be supplied via `.env` (the loader is line-based) — set it as a real environment variable. |
 
 A `.env` file is optional. If present, it is loaded at startup before
 configuration is read. Existing environment variables take precedence over
@@ -146,6 +149,31 @@ serialized error attached.
 - At sea (no boundary territory), `/codes/{lat},{lon}/territories` returns an
   empty list: JSON `{"territories":[]}`, XML
   `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><territories></territories>`.
+
+## Request recording and replay
+
+When `MAPCODE_DB_URL` is set, the service records a bounded, best-effort log of
+incoming requests to Postgres (fire-and-forget; recording never affects API
+latency or availability) and registers `GET /mapcode/replay` to read it back.
+
+`GET /mapcode/replay` is token-protected — it requires
+`Authorization: Bearer <MAPCODE_REPLAY_TOKEN>`, else 401. It is JSON-only (no
+`/xml` alias). Query parameters:
+
+| Parameter | Default | Meaning |
+|---|---|---|
+| `from` | _(required)_ | Window start, epoch seconds (inclusive). |
+| `to` | now | Window end, epoch seconds (exclusive). |
+| `limit` | `50000` | Max rows returned; max `200000`. |
+| `kind` | _(all)_ | Comma-separated list of endpoint-kind numbers to filter on. |
+
+The window (`to - from`) is capped at 31 days. The response is a columnar JSON
+object (`{from, to, count, truncated, ts, kind, lat, lon, status, client,
+mapcode}`) shaped for a canvas/WebGL renderer to iterate directly. Windows
+that end more than a minute in the past are cacheable
+(`Cache-Control: private, max-age=3600`); more recent windows are `no-store`,
+since events can take a few seconds to leave the recorder's queue and become
+queryable.
 
 ## Project layout
 

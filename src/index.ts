@@ -34,7 +34,10 @@ async function main(): Promise<void> {
     boundaryService,
     version: config.version,
     logger: { level: "info" },
-    recorder,
+    // The no-op recorder's close() is harmless, so it's still created
+    // unconditionally above to keep shutdown code uniform — but only wired
+    // into the server (installing the recording hook) when a pool exists.
+    recorder: pool !== null ? recorder : undefined,
     replay:
       pool !== null && config.replayToken !== null
         ? { token: config.replayToken, query: (args) => queryReplay(pool, args) }

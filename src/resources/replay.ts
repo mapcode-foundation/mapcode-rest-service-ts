@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { ApiInvalidFormatError, ApiIntegerOutOfRangeError } from "../errors.ts";
+import { ApiError, ApiInvalidFormatError, ApiIntegerOutOfRangeError } from "../errors.ts";
 import { parseIntStrict } from "./params.ts";
 import type { ReplayQueryFn } from "../storage/replay-query.ts";
 
@@ -26,6 +26,7 @@ import type { ReplayQueryFn } from "../storage/replay-query.ts";
 export const REPLAY_LIMIT_DEFAULT = 50_000;
 export const REPLAY_LIMIT_MAX = 200_000;
 export const REPLAY_WINDOW_MAX_SECONDS = 31 * 24 * 3600; // 31 days
+export const REPLAY_CACHE_HORIZON_SECONDS = 60;
 
 export interface ReplayParams {
   from?: string;
@@ -85,12 +86,28 @@ export async function handleReplay(
       if (kind === null) {
         throw new ApiInvalidFormatError("kind", params.kind, "comma-separated kind numbers");
       }
+      // kind is stored as int2 in Postgres; the kind table itself is gapped
+      // for growth, so accept the full int2 range rather than a narrower one.
+      if (kind < 0 || kind > 32767) {
+        throw new ApiIntegerOutOfRangeError("kind", kind, 0, 32767);
+      }
       return kind;
     });
   }
 
-  const columns = await query({ from, to, limit, kinds });
+  let columns;
+  try {
+    columns = await query({ from, to, limit, kinds });
+  } catch {
+    // Never let raw pg error text (hostnames, usernames, ...) reach the response body.
+    throw new ApiError(500, "Internal Server Error");
+  }
   const count = columns.ts.length;
   const dto: Record<string, unknown> = { from, to, count, truncated: count >= limit, ...columns };
-  return { dto, cacheControl: to < nowEpochSeconds ? "private, max-age=3600" : "no-store" };
+  // Events take up to ~flushIntervalMs to leave the recorder queue and become
+  // queryable, so a window ending within that horizon is not yet immutable.
+  return {
+    dto,
+    cacheControl: to < nowEpochSeconds - REPLAY_CACHE_HORIZON_SECONDS ? "private, max-age=3600" : "no-store",
+  };
 }

@@ -31,7 +31,7 @@ export const SCHEMA_DDL = `CREATE TABLE IF NOT EXISTS mapcode_request (
   -- (44 on disk incl. line pointer). Widening status/client to smallint,
   -- or moving mapcode ahead of kind, crosses the MAXALIGN boundary and
   -- costs 8 bytes per row.
-  ts      integer  NOT NULL,   -- epoch seconds, UTC (int4; overflows 2106)
+  ts      integer  NOT NULL,   -- epoch seconds, UTC (int4; overflows 2038)
   lat     integer,             -- microdegrees; NULL for non-geo calls
   lon     integer,             -- microdegrees, wrapped [-180e6, 180e6]
   kind    smallint NOT NULL,   -- endpoint identity (see src/routes/recording.ts)

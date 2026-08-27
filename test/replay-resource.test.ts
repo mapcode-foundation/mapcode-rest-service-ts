@@ -62,6 +62,20 @@ describe("handleReplay validation", () => {
   it("rejects malformed kind lists", async () => {
     await expect400({ from: "1000", to: "2000", kind: "10,x" });
   });
+  it("rejects kind values outside int2 range", async () => {
+    await expect400({ from: "1000", to: "2000", kind: "32768" });
+    await expect400({ from: "1000", to: "2000", kind: "-1" });
+    const { fn } = fakeQuery();
+    await handleReplay({ from: "1000", to: "2000", kind: "32767" }, NOW, fn); // int2 max OK
+  });
+  it("wraps a rejected query as a 500 with no leaked error text", async () => {
+    const fn = async (): Promise<ReplayColumns> => {
+      throw new Error("password authentication failed for user \"admin\" at host db.internal");
+    };
+    await expect(handleReplay({ from: "1000", to: "2000" }, NOW, fn)).rejects.toSatisfy(
+      (err: unknown) => err instanceof ApiError && err.httpStatus === 500 && err.message === "Internal Server Error"
+    );
+  });
 });
 
 describe("handleReplay behavior", () => {
@@ -107,5 +121,16 @@ describe("handleReplay behavior", () => {
     expect(live.cacheControl).toBe("no-store");
     const future = await handleReplay({ from: String(NOW - 100), to: String(NOW + 100) }, NOW, fn);
     expect(future.cacheControl).toBe("no-store");
+  });
+
+  it("treats a window ending within the recorder-flush horizon as not-yet-immutable", async () => {
+    const { fn } = fakeQuery();
+    // to is only 30s in the past: the tail of that window may still be sitting
+    // in the recorder's in-memory queue, not yet queryable.
+    const recent = await handleReplay({ from: String(NOW - 3600), to: String(NOW - 30) }, NOW, fn);
+    expect(recent.cacheControl).toBe("no-store");
+    // to is 61s in the past: safely beyond the flush horizon, cacheable.
+    const past = await handleReplay({ from: String(NOW - 3600), to: String(NOW - 61) }, NOW, fn);
+    expect(past.cacheControl).toBe("private, max-age=3600");
   });
 });
