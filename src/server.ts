@@ -28,6 +28,8 @@ import { registerCoordsRoutes } from "./routes/coords.routes.ts";
 import { registerCodesRoutes } from "./routes/codes.routes.ts";
 import { registerTerritoriesRoutes } from "./routes/territories.routes.ts";
 import { registerAlphabetsRoutes } from "./routes/alphabets.routes.ts";
+import { createRecordingHook } from "./routes/recording.ts";
+import type { RequestRecorder } from "./storage/request-recorder.ts";
 
 // ---------------------------------------------------------------------------
 // ServerDeps — passed to all route modules
@@ -38,6 +40,8 @@ export interface ServerDeps {
   boundaryService: BoundaryService;
   version: string;
   logger?: FastifyServerOptions["logger"];
+  /** Optional request recorder; absent → no recording hook is installed. */
+  recorder?: RequestRecorder;
 }
 
 // ---------------------------------------------------------------------------
@@ -51,6 +55,12 @@ export interface ServerDeps {
 
 export function buildServer(deps: ServerDeps): FastifyInstance {
   const app = Fastify({ logger: deps.logger ?? false, routerOptions: { ignoreTrailingSlash: true } });
+
+  // Per-request stash the route handlers fill for the recording hook.
+  app.decorateRequest("recording", null);
+  if (deps.recorder !== undefined) {
+    app.addHook("onResponse", createRecordingHook(deps.recorder));
+  }
 
   // -------------------------------------------------------------------------
   // Error handler

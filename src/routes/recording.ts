@@ -18,6 +18,9 @@
 // See docs/superpowers/specs/2026-08-27-request-recording-and-replay-design.md.
 // ---------------------------------------------------------------------------
 
+import type { FastifyReply, FastifyRequest } from "fastify";
+import type { RequestRecorder } from "../storage/request-recorder.ts";
+
 /** Endpoint identity codes (smallint in the database, gapped for growth). */
 export const KIND = {
   help: 0,
@@ -140,4 +143,33 @@ export function rawQueryValue(query: unknown, name: string): string | undefined 
   if (typeof value === "string") return value;
   if (Array.isArray(value) && typeof value[0] === "string") return value[0];
   return undefined;
+}
+
+/**
+ * The single onResponse hook: assemble the event after the reply is sent.
+ * Runs off the response path (onResponse fires after the bytes went out) and
+ * must never throw — recording failures must never surface to callers.
+ */
+export function createRecordingHook(recorder: RequestRecorder) {
+  return function recordRequest(request: FastifyRequest, reply: FastifyReply, done: () => void): void {
+    try {
+      // CORS preflights are transport noise, not API usage.
+      if (request.method.toUpperCase() !== "OPTIONS" && !allowLogDenies(rawQueryValue(request.query, "allowLog"))) {
+        const stash = request.recording;
+        const typeParam = (request.params as Record<string, string> | null)?.["type"];
+        recorder.record({
+          ts: Math.floor(Date.now() / 1000),
+          kind: stash?.kind ?? kindFromRoute(request.routeOptions?.url, typeParam),
+          lat: stash?.latDeg !== undefined ? latToMicro(stash.latDeg) : null,
+          lon: stash?.lonDeg !== undefined ? lonToMicro(stash.lonDeg) : null,
+          status: condenseStatus(reply.statusCode),
+          client: clientToCode(rawQueryValue(request.query, "client")),
+          mapcode: stash?.mapcode ?? null,
+        });
+      }
+    } catch {
+      // Swallow everything: recording must never affect a response.
+    }
+    done();
+  };
 }

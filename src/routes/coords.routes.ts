@@ -19,6 +19,7 @@ import { respond } from "../serialization/respond.ts";
 import { ApiForbiddenError } from "../errors.ts";
 import { handleCoords } from "../resources/coords.ts";
 import { getQueryParam } from "./query.ts";
+import { KIND } from "./recording.ts";
 
 export function registerCoordsRoutes(app: FastifyInstance, deps: ServerDeps): void {
   const { mapcodeService } = deps;
@@ -44,6 +45,16 @@ export function registerCoordsRoutes(app: FastifyInstance, deps: ServerDeps): vo
       { code, context, territory, include },
       mapcodeService
     );
+    // Stash the DECODED point (or the rectangle's center) plus the raw mapcode.
+    const target = (typeof dto["latDeg"] === "number" ? dto : dto["center"]) as
+      | { latDeg?: number; lonDeg?: number }
+      | undefined;
+    request.recording = {
+      kind: KIND.coords,
+      latDeg: typeof target?.latDeg === "number" ? target.latDeg : undefined,
+      lonDeg: typeof target?.lonDeg === "number" ? target.lonDeg : undefined,
+      mapcode: code,
+    };
     return respond(reply, format, dto, schema);
   };
 

@@ -42,7 +42,12 @@ let app: FastifyInstance;
 beforeAll(async () => {
   const mapcodeService = createMapcodeService();
   const boundaryService = await BoundaryService.load("test/resources/borders-test.fgb");
-  app = buildServer({ mapcodeService, boundaryService, version: "1.0" });
+  app = buildServer({
+    mapcodeService,
+    boundaryService,
+    version: "1.0",
+    recorder: { record: () => {}, flush: async () => {}, close: async () => {} },
+  });
   await app.ready();
 });
 

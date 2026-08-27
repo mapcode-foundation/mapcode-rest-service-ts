@@ -19,6 +19,8 @@ import { respond, respondList } from "../serialization/respond.ts";
 import { ApiForbiddenError, ApiNotFoundError } from "../errors.ts";
 import { handleCodes, handleTerritoriesForLatLon } from "../resources/codes.ts";
 import { getQueryParam } from "./query.ts";
+import { KIND } from "./recording.ts";
+import { mapToLon } from "../domain/geo.ts";
 
 /** Split a decoded "lat,lon" path segment on the FIRST comma. */
 function splitLatLon(latlon: string): { latStr: string; lonStr: string } | null {
@@ -70,6 +72,8 @@ export function registerCodesRoutes(app: FastifyInstance, deps: ServerDeps): voi
       mapcodeService,
       boundaryService
     );
+    // Coordinate source: bit-identical to the encoder's own normalization.
+    request.recording = { kind: KIND.codes, latDeg: Number(ll.latStr), lonDeg: mapToLon(Number(ll.lonStr)) };
     return result.kind === "list"
       ? respondList(reply, format, result.items, result.schema)
       : respond(reply, format, result.dto, result.schema);
@@ -91,6 +95,7 @@ export function registerCodesRoutes(app: FastifyInstance, deps: ServerDeps): voi
       throw new ApiNotFoundError(`Route not found: ${request.method} ${request.url}`);
     }
     const { dto, schema } = handleTerritoriesForLatLon(ll.latStr, ll.lonStr, boundaryService);
+    request.recording = { kind: KIND.codesTerritories, latDeg: Number(ll.latStr), lonDeg: mapToLon(Number(ll.lonStr)) };
     return respond(reply, format, dto, schema);
   };
   app.get("/mapcode/codes/:latlon/territories", territoriesHandler);
@@ -131,6 +136,11 @@ export function registerCodesRoutes(app: FastifyInstance, deps: ServerDeps): voi
       mapcodeService,
       boundaryService
     );
+    request.recording = {
+      kind: type === "local" ? KIND.codesLocal : type === "international" ? KIND.codesInternational : KIND.codesMapcodes,
+      latDeg: Number(ll.latStr),
+      lonDeg: mapToLon(Number(ll.lonStr)),
+    };
     return result.kind === "list"
       ? respondList(reply, format, result.items, result.schema)
       : respond(reply, format, result.dto, result.schema);
