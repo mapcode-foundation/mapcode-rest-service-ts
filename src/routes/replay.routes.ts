@@ -43,6 +43,13 @@ export function registerReplayRoutes(app: FastifyInstance, deps: ServerDeps): vo
   if (replay === undefined) return;
 
   const replayHandler: RouteHandlerMethod = async (request, reply) => {
+    // Set before the auth check (and before anything can throw) so every
+    // response from this route — 200, 400, 401, or 500 — carries it: headers
+    // set on the reply persist through Fastify's error handler. Wildcard CORS
+    // is safe: auth is a Bearer header, not an ambient credential a foreign
+    // origin could ride on.
+    reply.header("access-control-allow-origin", "*");
+
     if (!bearerTokenMatches(request.headers.authorization, replay.token)) {
       throw new ApiUnauthorizedError("Missing or invalid Bearer token");
     }
@@ -57,11 +64,8 @@ export function registerReplayRoutes(app: FastifyInstance, deps: ServerDeps): vo
       Math.floor(Date.now() / 1000),
       replay.query
     );
-    // Wildcard CORS is safe: auth is a Bearer header, not an ambient
-    // credential a foreign origin could ride on.
     return reply
       .code(200)
-      .header("access-control-allow-origin", "*")
       .header("cache-control", cacheControl)
       .send(dto);
   };

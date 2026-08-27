@@ -56,6 +56,7 @@ describe("auth", () => {
     const res = await app.inject({ method: "GET", url: "/mapcode/replay?from=1000&to=2000" });
     expect(res.statusCode).toBe(401);
     expect(JSON.parse(res.body)).toMatchObject({ status: 401 });
+    expect(res.headers["access-control-allow-origin"]).toBe("*");
     expect(queryCalls).toHaveLength(0);
   });
   it("401s with a wrong token and with a non-Bearer scheme", async () => {
@@ -72,6 +73,12 @@ describe("validation", () => {
       const res = await app.inject({ method: "GET", url: `/mapcode/replay?${qs}`, headers: AUTH });
       expect(res.statusCode).toBe(400);
     }
+  });
+
+  it("400 response for a missing from still carries the CORS header", async () => {
+    const res = await app.inject({ method: "GET", url: "/mapcode/replay", headers: AUTH });
+    expect(res.statusCode).toBe(400);
+    expect(res.headers["access-control-allow-origin"]).toBe("*");
   });
 });
 

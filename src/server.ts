@@ -107,7 +107,10 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // -------------------------------------------------------------------------
   app.addHook("onRequest", async (request: FastifyRequest, reply: FastifyReply) => {
     const method = request.method.toUpperCase();
-    // The replay CORS preflight is the one permitted non-GET request.
+    // The replay CORS preflight is the one permitted non-GET request. This
+    // hook runs onRequest, before route matching, so routerOptions'
+    // ignoreTrailingSlash hasn't applied yet — strip the query string and
+    // any trailing slash by hand to match the registered path.
     if (method === "OPTIONS" && deps.replay !== undefined) {
       const path = request.url.split("?")[0].replace(/\/+$/, "");
       if (path === "/mapcode/replay") return;
