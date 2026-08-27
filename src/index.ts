@@ -15,6 +15,9 @@
 import { loadConfig, loadEnvFileIfExists } from "./config.ts";
 import { BoundaryService } from "./domain/boundary-service.ts";
 import { createMapcodeService } from "./domain/mapcode-service.ts";
+import { createPool } from "./storage/pool.ts";
+import { createRequestRecorder } from "./storage/request-recorder.ts";
+import { queryReplay } from "./storage/replay-query.ts";
 import { buildServer } from "./server.ts";
 
 async function main(): Promise<void> {
@@ -22,14 +25,46 @@ async function main(): Promise<void> {
   const config = loadConfig();
   const boundaryService = await BoundaryService.load(config.bordersPath);
   const mapcodeService = createMapcodeService();
+
+  // config.dbUrl contains a password — it must never be logged.
+  const pool = createPool(config);
+  const recorder = createRequestRecorder(pool);
   const app = buildServer({
     mapcodeService,
     boundaryService,
     version: config.version,
     logger: { level: "info" },
+    recorder,
+    replay:
+      pool !== null && config.replayToken !== null
+        ? { token: config.replayToken, query: (args) => queryReplay(pool, args) }
+        : undefined,
   });
+
+  // A normal deploy stops the service with a signal: drain the recorder so
+  // no recorded events are lost. (recorder.close() flushes before resolving.)
+  let shuttingDown = false;
+  const shutdown = (): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    void (async () => {
+      try {
+        await app.close();
+        await recorder.close();
+        await pool?.end();
+      } finally {
+        process.exit(0);
+      }
+    })();
+  };
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
+
   await app.listen({ port: config.port, host: "0.0.0.0" });
   console.log(`mapcode-rest-service-ts listening on :${config.port} (version ${config.version})`);
+  if (pool !== null) {
+    console.log("request recording enabled; /mapcode/replay registered");
+  }
 }
 
 main().catch((err) => {
