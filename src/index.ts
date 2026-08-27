@@ -48,13 +48,20 @@ async function main(): Promise<void> {
     if (shuttingDown) return;
     shuttingDown = true;
     void (async () => {
-      try {
-        await app.close();
-        await recorder.close();
-        await pool?.end();
-      } finally {
-        process.exit(0);
-      }
+      let failed = false;
+      const step = async (name: string, run: () => Promise<unknown>): Promise<void> => {
+        try {
+          await run();
+        } catch (err) {
+          failed = true;
+          // Log only the message — config values (the DB URL carries a password) must never reach logs.
+          console.error(`shutdown: ${name} failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      };
+      await step("app.close", () => app.close());
+      await step("recorder drain", () => recorder.close());
+      await step("pool.end", async () => pool?.end());
+      process.exit(failed ? 1 : 0);
     })();
   };
   process.on("SIGTERM", shutdown);
