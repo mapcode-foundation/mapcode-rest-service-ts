@@ -74,6 +74,7 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
       );
       expect(JSON.stringify(res.rows[0])).toContain("mapcode_request_ts_brin");
     } finally {
+      await client.query("RESET enable_seqscan");
       client.release();
     }
   });
