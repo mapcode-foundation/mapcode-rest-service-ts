@@ -16,6 +16,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import {
   createRequestRecorder,
   insertSql,
+  FLUSH_INTERVAL_MS_DEFAULT,
   type RecordedRequest,
 } from "../src/storage/request-recorder.ts";
 import { SCHEMA_DDL } from "../src/storage/schema.ts";
@@ -127,6 +128,17 @@ describe("createRequestRecorder", () => {
     const recorder = createRequestRecorder(pool, { flushIntervalMs: 5000 });
     recorder.record(event());
     expect(pool.inserts()).toHaveLength(0);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(pool.inserts()).toHaveLength(1);
+    await recorder.close();
+  });
+
+  it("syncs events to the database within 5 seconds with default options", async () => {
+    expect(FLUSH_INTERVAL_MS_DEFAULT).toBeLessThanOrEqual(5000); // the sync guarantee
+    vi.useFakeTimers();
+    const pool = fakePool();
+    const recorder = createRequestRecorder(pool); // no options — index.ts creates it like this
+    recorder.record(event());
     await vi.advanceTimersByTimeAsync(5000);
     expect(pool.inserts()).toHaveLength(1);
     await recorder.close();

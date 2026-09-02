@@ -39,10 +39,17 @@ export interface RequestRecorder {
   close(): Promise<void>;
 }
 
+/**
+ * Sync bound: a recorded event reaches the database (or is dropped) within
+ * this interval — the timer flush guarantees it even when the batch-size
+ * threshold is never hit.
+ */
+export const FLUSH_INTERVAL_MS_DEFAULT = 5000;
+
 export interface RecorderOptions {
   /** Rows per INSERT and auto-flush threshold (default 500). */
   batchSize?: number;
-  /** Timer flush period in ms (default 5000). */
+  /** Timer flush period in ms (default FLUSH_INTERVAL_MS_DEFAULT). */
   flushIntervalMs?: number;
   /** Queue cap; events beyond it are dropped (default 10000). */
   maxQueue?: number;
@@ -119,7 +126,7 @@ export function createRequestRecorder(pool: RecorderPool | null, options: Record
 
   const timer = setInterval(() => {
     void flush();
-  }, options.flushIntervalMs ?? 5000);
+  }, options.flushIntervalMs ?? FLUSH_INTERVAL_MS_DEFAULT);
   timer.unref();
 
   return {
