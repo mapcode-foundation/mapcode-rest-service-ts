@@ -42,11 +42,15 @@ export interface StatsCounts {
 
 export type StatsQueryFn = (nowEpochSeconds: number) => Promise<StatsCounts>;
 
+// KIND.replay (src/routes/recording.ts): historical rows from before replay
+// traffic stopped being recorded — meta-traffic, excluded from every window.
+const REPLAY_KIND = 50;
+
 export function buildStatsQuery(nowEpochSeconds: number): { text: string; values: unknown[] } {
   const filters = STATS_WINDOWS.map(
     (w, i) => `count(*) FILTER (WHERE ts >= $${i + 1}) AS c_${w.key}`
   );
-  const text = `SELECT ${filters.join(", ")}, count(*) AS c_all FROM mapcode_request`;
+  const text = `SELECT ${filters.join(", ")}, count(*) AS c_all FROM mapcode_request WHERE kind <> ${REPLAY_KIND}`;
   const values = STATS_WINDOWS.map((w) => nowEpochSeconds - w.seconds);
   return { text, values };
 }

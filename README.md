@@ -187,7 +187,9 @@ since events can take a few seconds to leave the recorder's queue and become
 queryable.
 
 `GET /mapcode/replay/stats` (same Bearer token, no parameters) returns usage
-counters over fixed trailing windows anchored at now — non-geo rows included:
+counters over fixed trailing windows anchored at now — non-geo rows included.
+Calls to `/mapcode/replay` and anything below it are meta-traffic: they are
+not recorded, and historical replay rows are excluded from the counts:
 
 ```json
 {

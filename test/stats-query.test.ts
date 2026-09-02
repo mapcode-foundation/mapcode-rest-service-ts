@@ -23,6 +23,8 @@ describe("buildStatsQuery", () => {
     expect(text).toContain("count(*) FILTER (WHERE ts >= $1)");
     expect(text).toContain("count(*) FILTER (WHERE ts >= $6)");
     expect(text).toContain("FROM mapcode_request");
+    // Historical replay-endpoint rows (KIND.replay) are meta-traffic, not API usage.
+    expect(text).toContain("WHERE kind <> 50");
     expect(values).toEqual([
       NOW - 60,
       NOW - 3600,

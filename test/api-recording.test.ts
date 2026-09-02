@@ -124,6 +124,48 @@ describe("recorded kinds and coordinates", () => {
   });
 });
 
+describe("replay endpoints are never recorded", () => {
+  it("skips /mapcode/replay and everything below it, matched or not", async () => {
+    const withReplay = buildServer({
+      mapcodeService,
+      boundaryService: await BoundaryService.load("test/resources/borders-test.fgb"),
+      version: "1.0",
+      recorder: captureRecorder,
+      replay: {
+        token: "t",
+        query: async () => ({ ts: [], kind: [], lat: [], lon: [], status: [], client: [], mapcode: [] }),
+        stats: async () => ({ "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 0 }),
+      },
+    });
+    await withReplay.ready();
+    events.length = 0;
+    // 401s (no token), a 200 (with token), a trailing slash, and a 404 below the prefix.
+    for (const url of [
+      "/mapcode/replay?from=1000&to=2000",
+      "/mapcode/replay/stats",
+      "/mapcode/replay/",
+      "/mapcode/replay/no-such-thing",
+    ]) {
+      await withReplay.inject({ method: "GET", url });
+    }
+    await withReplay.inject({
+      method: "GET",
+      url: "/mapcode/replay/stats",
+      headers: { authorization: "Bearer t" },
+    });
+    expect(events).toHaveLength(0);
+    // A lookalike prefix is normal unmatched traffic and still records.
+    await withReplay.inject({ method: "GET", url: "/mapcode/replayground" });
+    expect(events).toMatchObject([{ kind: KIND.unmatched }]);
+    await withReplay.close();
+  });
+
+  it("skips /mapcode/replay 404s even when replay is not configured", async () => {
+    await app.inject({ method: "GET", url: "/mapcode/replay?from=1" });
+    expect(events).toHaveLength(0);
+  });
+});
+
 describe("allowLog", () => {
   it("suppresses recording for false/0/no (case-insensitive)", async () => {
     for (const v of ["false", "FALSE", "0", "no", "No"]) {

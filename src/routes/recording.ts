@@ -36,6 +36,8 @@ export const KIND = {
   territory: 31,
   alphabets: 40,
   alphabet: 41,
+  // Historical rows only: replay-family requests are no longer recorded
+  // (see isReplayFamilyUrl), and stats-query.ts excludes this kind.
   replay: 50,
   unmatched: 99,
 } as const;
@@ -106,8 +108,17 @@ const ROUTE_KIND: Record<string, number> = {
   "/mapcode/territories/:territory": KIND.territory,
   "/mapcode/alphabets": KIND.alphabets,
   "/mapcode/alphabets/:alphabet": KIND.alphabet,
-  "/mapcode/replay": KIND.replay,
 };
+
+/**
+ * Replay-family requests (/mapcode/replay and anything below it) read the log
+ * back — meta-traffic, not API usage — and are never recorded. Checked on the
+ * raw request path so unmatched 404s below the prefix are skipped too.
+ */
+export function isReplayFamilyUrl(url: string): boolean {
+  const path = url.split("?")[0].replace(/\/+$/, "");
+  return path === "/mapcode/replay" || path.startsWith("/mapcode/replay/");
+}
 
 /**
  * Derive the endpoint kind from the matched route pattern. `routeUrl` is
@@ -154,7 +165,11 @@ export function createRecordingHook(recorder: RequestRecorder) {
   return function recordRequest(request: FastifyRequest, reply: FastifyReply, done: () => void): void {
     try {
       // CORS preflights are transport noise, not API usage.
-      if (request.method.toUpperCase() !== "OPTIONS" && !allowLogDenies(rawQueryValue(request.query, "allowLog"))) {
+      if (
+        request.method.toUpperCase() !== "OPTIONS" &&
+        !isReplayFamilyUrl(request.url) &&
+        !allowLogDenies(rawQueryValue(request.query, "allowLog"))
+      ) {
         const stash = request.recording;
         const typeParam = (request.params as Record<string, string> | null)?.["type"];
         recorder.record({

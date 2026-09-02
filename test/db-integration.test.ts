@@ -66,18 +66,19 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
     expect(cols.kind).toEqual([20]);
   });
 
-  it("counts events per stats window, non-geo rows included", async () => {
+  it("counts events per stats window, non-geo rows included, replay rows excluded", async () => {
     const now = Math.floor(Date.now() / 1000);
     const recorder = createRequestRecorder(pool);
     recorder.record({ ts: now, kind: 10, lat: null, lon: null, status: 20, client: 0, mapcode: null });
     recorder.record({ ts: now - 7200, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 1, mapcode: null });
+    recorder.record({ ts: now, kind: 50, lat: null, lon: null, status: 20, client: 0, mapcode: null }); // historical replay row
     await recorder.close();
 
     const counts = await queryStats(pool, now);
     expect(counts["1m"]).toBe(1);
     expect(counts["1h"]).toBe(1);
     expect(counts["1d"]).toBe(2);
-    expect(counts.all).toBe(5); // 3 rows from the replay round-trip test + these 2
+    expect(counts.all).toBe(5); // 3 rows from the replay round-trip test + these 2; the kind-50 row is excluded
   });
 
   it("uses the BRIN index for the range scan", async () => {

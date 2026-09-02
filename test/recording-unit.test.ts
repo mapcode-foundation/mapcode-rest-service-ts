@@ -22,6 +22,7 @@ import {
   lonToMicro,
   kindFromRoute,
   rawQueryValue,
+  isReplayFamilyUrl,
 } from "../src/routes/recording.ts";
 
 describe("condenseStatus", () => {
@@ -98,7 +99,6 @@ describe("kindFromRoute", () => {
     expect(kindFromRoute("/mapcode/territories/:territory", undefined)).toBe(KIND.territory);
     expect(kindFromRoute("/mapcode/alphabets", undefined)).toBe(KIND.alphabets);
     expect(kindFromRoute("/mapcode/alphabets/:alphabet", undefined)).toBe(KIND.alphabet);
-    expect(kindFromRoute("/mapcode/replay", undefined)).toBe(KIND.replay);
   });
   it("collapses /xml/ and /json/ prefixes", () => {
     expect(kindFromRoute("/mapcode/xml/codes/:latlon", undefined)).toBe(KIND.codes);
@@ -114,6 +114,22 @@ describe("kindFromRoute", () => {
   it("maps unmatched (no route) and unknown patterns to 99", () => {
     expect(kindFromRoute(undefined, undefined)).toBe(KIND.unmatched);
     expect(kindFromRoute("/something/else", undefined)).toBe(KIND.unmatched);
+  });
+});
+
+describe("isReplayFamilyUrl", () => {
+  it("matches /mapcode/replay and anything below it, query and slashes ignored", () => {
+    expect(isReplayFamilyUrl("/mapcode/replay")).toBe(true);
+    expect(isReplayFamilyUrl("/mapcode/replay/")).toBe(true);
+    expect(isReplayFamilyUrl("/mapcode/replay?from=1&to=2")).toBe(true);
+    expect(isReplayFamilyUrl("/mapcode/replay/stats")).toBe(true);
+    expect(isReplayFamilyUrl("/mapcode/replay/stats/?x=1")).toBe(true);
+    expect(isReplayFamilyUrl("/mapcode/replay/no-such-thing")).toBe(true);
+  });
+  it("does not match lookalike prefixes or other routes", () => {
+    expect(isReplayFamilyUrl("/mapcode/replayground")).toBe(false);
+    expect(isReplayFamilyUrl("/mapcode/version")).toBe(false);
+    expect(isReplayFamilyUrl("/mapcode")).toBe(false);
   });
 });
 
