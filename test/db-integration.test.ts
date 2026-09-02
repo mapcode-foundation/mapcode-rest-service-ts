@@ -22,6 +22,7 @@ import { Pool } from "pg";
 import { ensureSchema } from "../src/storage/schema.ts";
 import { createRequestRecorder } from "../src/storage/request-recorder.ts";
 import { queryReplay } from "../src/storage/replay-query.ts";
+import { queryStats } from "../src/storage/stats-query.ts";
 
 const dbUrl = process.env.TEST_DB_URL;
 
@@ -63,6 +64,20 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
   it("filters by kind", async () => {
     const cols = await queryReplay(pool, { from: 1000, to: 2000, limit: 10, kinds: [20] });
     expect(cols.kind).toEqual([20]);
+  });
+
+  it("counts events per stats window, non-geo rows included", async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const recorder = createRequestRecorder(pool);
+    recorder.record({ ts: now, kind: 10, lat: null, lon: null, status: 20, client: 0, mapcode: null });
+    recorder.record({ ts: now - 7200, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 1, mapcode: null });
+    await recorder.close();
+
+    const counts = await queryStats(pool, now);
+    expect(counts["1m"]).toBe(1);
+    expect(counts["1h"]).toBe(1);
+    expect(counts["1d"]).toBe(2);
+    expect(counts.all).toBe(5); // 3 rows from the replay round-trip test + these 2
   });
 
   it("uses the BRIN index for the range scan", async () => {

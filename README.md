@@ -60,7 +60,7 @@ Configuration is read from environment variables (via `src/config.ts`):
 | `PORT` | `8080` | TCP port to listen on. |
 | `VERSION` | `package.json` version | Version string returned by `/mapcode/version`. |
 | `MAPCODE_DB_URL` | _(unset)_ | Optional Postgres connection string. When unset, request recording is disabled and `/mapcode/replay` is not registered. Contains credentials — never logged. **Do not put `sslmode` in the URL** (see TLS note below). |
-| `MAPCODE_REPLAY_TOKEN` | _(unset)_ | Bearer token for `GET /mapcode/replay`. **Required whenever `MAPCODE_DB_URL` is set** — the service refuses to start without it (fail closed). |
+| `MAPCODE_REPLAY_TOKEN` | _(unset)_ | Bearer token for `GET /mapcode/replay` and `GET /mapcode/replay/stats`. **Required whenever `MAPCODE_DB_URL` is set** — the service refuses to start without it (fail closed). |
 | `MAPCODE_DB_CA_CERT` | _(unset)_ | PEM of the database CA certificate, for verified TLS to Postgres. A multi-line PEM cannot be supplied via `.env` (the loader is line-based) — set it as a real environment variable. A PEM collapsed to one line is **silently ignored** by the TLS stack — keep the original line breaks. |
 
 **TLS to Postgres:** set `MAPCODE_DB_CA_CERT` to the cluster's CA and leave
@@ -185,6 +185,21 @@ that end more than a minute in the past are cacheable
 (`Cache-Control: private, max-age=3600`); more recent windows are `no-store`,
 since events can take a few seconds to leave the recorder's queue and become
 queryable.
+
+`GET /mapcode/replay/stats` (same Bearer token, no parameters) returns usage
+counters over fixed trailing windows anchored at now — non-geo rows included:
+
+```json
+{
+  "now": 1756800000,
+  "totals": { "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, "all": 2400000 },
+  "avgPerHour": { "1d": 213.4, "7d": 238.7, "31d": 215.1, "1y": 216.9 }
+}
+```
+
+`avgPerHour` is `totals[w] / hours(w)` rounded to one decimal, for the windows
+from 1d up (shorter windows are too bursty to average; `all` has an unknown
+span). Responses carry `Cache-Control: private, max-age=60`.
 
 ## Project layout
 

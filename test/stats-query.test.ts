@@ -1,0 +1,53 @@
+// Copyright (C) 2026, Stichting Mapcode Foundation (http://www.mapcode.com)
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+import { describe, it, expect } from "vitest";
+import { buildStatsQuery, queryStats } from "../src/storage/stats-query.ts";
+
+const NOW = 1_737_100_000;
+
+describe("buildStatsQuery", () => {
+  it("builds one aggregate with a FILTER per window, cutoffs as values", () => {
+    const { text, values } = buildStatsQuery(NOW);
+    expect(text).toContain("count(*) FILTER (WHERE ts >= $1)");
+    expect(text).toContain("count(*) FILTER (WHERE ts >= $6)");
+    expect(text).toContain("FROM mapcode_request");
+    expect(values).toEqual([
+      NOW - 60,
+      NOW - 3600,
+      NOW - 86400,
+      NOW - 7 * 86400,
+      NOW - 31 * 86400,
+      NOW - 365 * 86400,
+    ]);
+  });
+});
+
+describe("queryStats", () => {
+  it("converts pg's int8 string counts to numbers", async () => {
+    // pg returns count(*) (int8) as a string.
+    const row = { c_1m: "1", c_1h: "2", c_1d: "3", c_7d: "4", c_31d: "5", c_1y: "6", c_all: "7" };
+    let seen: { text: string; values?: unknown[] } | null = null;
+    const pool = {
+      query: async (text: string, values?: unknown[]) => {
+        seen = { text, values };
+        return { rows: [row] };
+      },
+    };
+    const counts = await queryStats(pool, NOW);
+    expect(counts).toEqual({ "1m": 1, "1h": 2, "1d": 3, "7d": 4, "31d": 5, "1y": 6, all: 7 });
+    expect(seen).not.toBeNull();
+    expect(seen!.values).toHaveLength(6);
+  });
+});

@@ -18,6 +18,7 @@ import { createMapcodeService } from "./domain/mapcode-service.ts";
 import { createPool } from "./storage/pool.ts";
 import { createRequestRecorder } from "./storage/request-recorder.ts";
 import { queryReplay } from "./storage/replay-query.ts";
+import { queryStats } from "./storage/stats-query.ts";
 import { buildServer } from "./server.ts";
 
 async function main(): Promise<void> {
@@ -40,7 +41,11 @@ async function main(): Promise<void> {
     recorder: pool !== null ? recorder : undefined,
     replay:
       pool !== null && config.replayToken !== null
-        ? { token: config.replayToken, query: (args) => queryReplay(pool, args) }
+        ? {
+            token: config.replayToken,
+            query: (args) => queryReplay(pool, args),
+            stats: (now) => queryStats(pool, now),
+          }
         : undefined,
   });
 
@@ -73,7 +78,7 @@ async function main(): Promise<void> {
   await app.listen({ port: config.port, host: "0.0.0.0" });
   console.log(`mapcode-rest-service-ts listening on :${config.port} (version ${config.version})`);
   if (pool !== null) {
-    console.log("request recording enabled; /mapcode/replay registered");
+    console.log("request recording enabled; /mapcode/replay and /mapcode/replay/stats registered");
   }
 }
 

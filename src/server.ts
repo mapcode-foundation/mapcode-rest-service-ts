@@ -32,6 +32,7 @@ import { createRecordingHook } from "./routes/recording.ts";
 import type { RequestRecorder } from "./storage/request-recorder.ts";
 import { registerReplayRoutes } from "./routes/replay.routes.ts";
 import type { ReplayQueryFn } from "./storage/replay-query.ts";
+import type { StatsQueryFn } from "./storage/stats-query.ts";
 
 // ---------------------------------------------------------------------------
 // ServerDeps — passed to all route modules
@@ -44,8 +45,8 @@ export interface ServerDeps {
   logger?: FastifyServerOptions["logger"];
   /** Optional request recorder; absent → no recording hook is installed. */
   recorder?: RequestRecorder;
-  /** Replay endpoint config; absent → /mapcode/replay is not registered. */
-  replay?: { token: string; query: ReplayQueryFn };
+  /** Replay endpoints config; absent → /mapcode/replay[/stats] is not registered. */
+  replay?: { token: string; query: ReplayQueryFn; stats: StatsQueryFn };
 }
 
 // ---------------------------------------------------------------------------
@@ -107,13 +108,13 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // -------------------------------------------------------------------------
   app.addHook("onRequest", async (request: FastifyRequest, reply: FastifyReply) => {
     const method = request.method.toUpperCase();
-    // The replay CORS preflight is the one permitted non-GET request. This
+    // The replay CORS preflights are the only permitted non-GET requests. This
     // hook runs onRequest, before route matching, so routerOptions'
     // ignoreTrailingSlash hasn't applied yet — strip the query string and
-    // any trailing slash by hand to match the registered path.
+    // any trailing slash by hand to match the registered paths.
     if (method === "OPTIONS" && deps.replay !== undefined) {
       const path = request.url.split("?")[0].replace(/\/+$/, "");
-      if (path === "/mapcode/replay") return;
+      if (path === "/mapcode/replay" || path === "/mapcode/replay/stats") return;
     }
     if (method !== "GET" && method !== "HEAD") {
       const { format } = resolveFormat(request.url, request.headers.accept);

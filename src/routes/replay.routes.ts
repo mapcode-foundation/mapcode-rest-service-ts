@@ -18,12 +18,14 @@ import type { FastifyInstance, RouteHandlerMethod } from "fastify";
 import type { ServerDeps } from "../server.ts";
 import { ApiUnauthorizedError } from "../errors.ts";
 import { handleReplay } from "../resources/replay.ts";
+import { handleReplayStats } from "../resources/replay-stats.ts";
 import { getQueryParam } from "./query.ts";
 
 // ---------------------------------------------------------------------------
-// GET /mapcode/replay — token-protected, JSON only (deliberately outside the
-// Java parity contract: no /xml/ or /json/ aliases). Registered only when a
-// database is configured; otherwise the path 404s like any unknown route.
+// GET /mapcode/replay and /mapcode/replay/stats — token-protected, JSON only
+// (deliberately outside the Java parity contract: no /xml/ or /json/ aliases).
+// Registered only when a database is configured; otherwise the paths 404 like
+// any unknown route.
 // ---------------------------------------------------------------------------
 
 /**
@@ -70,21 +72,36 @@ export function registerReplayRoutes(app: FastifyInstance, deps: ServerDeps): vo
       .send(dto);
   };
 
-  // Compression scoped to this route only — the parity endpoints'
+  const statsHandler: RouteHandlerMethod = async (request, reply) => {
+    reply.header("access-control-allow-origin", "*");
+    if (!bearerTokenMatches(request.headers.authorization, replay.token)) {
+      throw new ApiUnauthorizedError("Missing or invalid Bearer token");
+    }
+    const { dto, cacheControl } = await handleReplayStats(Math.floor(Date.now() / 1000), replay.stats);
+    return reply
+      .code(200)
+      .header("cache-control", cacheControl)
+      .send(dto);
+  };
+
+  // Compression scoped to these routes only — the parity endpoints'
   // byte-for-byte responses must never see a content-encoding change.
   app.register(async (scope) => {
     await scope.register(compress);
     scope.get("/mapcode/replay", replayHandler);
+    scope.get("/mapcode/replay/stats", statsHandler);
   });
 
   // A Bearer header from browser JS forces a CORS preflight.
-  app.options("/mapcode/replay", async (_request, reply) => {
-    return reply
-      .code(204)
-      .header("access-control-allow-origin", "*")
-      .header("access-control-allow-headers", "authorization")
-      .header("access-control-allow-methods", "GET")
-      .header("access-control-max-age", "86400")
-      .send();
-  });
+  for (const path of ["/mapcode/replay", "/mapcode/replay/stats"]) {
+    app.options(path, async (_request, reply) => {
+      return reply
+        .code(204)
+        .header("access-control-allow-origin", "*")
+        .header("access-control-allow-headers", "authorization")
+        .header("access-control-allow-methods", "GET")
+        .header("access-control-max-age", "86400")
+        .send();
+    });
+  }
 }
