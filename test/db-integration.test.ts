@@ -74,11 +74,14 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
     recorder.record({ ts: now, kind: 50, lat: null, lon: null, status: 20, client: 0, mapcode: null }); // historical replay row
     await recorder.close();
 
-    const counts = await queryStats(pool, now);
-    expect(counts["1m"]).toBe(1);
-    expect(counts["1h"]).toBe(1);
-    expect(counts["1d"]).toBe(2);
-    expect(counts.all).toBe(5); // 3 rows from the replay round-trip test + these 2; the kind-50 row is excluded
+    const rows = await queryStats(pool, now);
+    const total = (key: "1m" | "1h" | "1d" | "all") => rows.reduce((sum, r) => sum + r[key], 0);
+    expect(total("1m")).toBe(1);
+    expect(total("1h")).toBe(1);
+    expect(total("1d")).toBe(2);
+    expect(total("all")).toBe(5); // 3 rows from the replay round-trip test + these 2; the kind-50 row is excluded
+    expect(rows.find((r) => r.kind === 10)?.all).toBe(3); // ts=1000 round-trip row + these 2
+    expect(rows.some((r) => r.kind === 50)).toBe(false);
   });
 
   it("uses the BRIN index for the range scan", async () => {

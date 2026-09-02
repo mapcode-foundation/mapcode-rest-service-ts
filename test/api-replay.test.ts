@@ -19,18 +19,18 @@ import { buildServer } from "../src/server.ts";
 import { createMapcodeService } from "../src/domain/mapcode-service.ts";
 import { BoundaryService } from "../src/domain/boundary-service.ts";
 import type { ReplayColumns, ReplayQueryArgs } from "../src/storage/replay-query.ts";
-import type { StatsCounts } from "../src/storage/stats-query.ts";
+import type { StatsKindCounts } from "../src/storage/stats-query.ts";
 
 const TOKEN = "test-token";
 const AUTH = { authorization: `Bearer ${TOKEN}` };
 const EMPTY: ReplayColumns = { ts: [], kind: [], lat: [], lon: [], status: [], client: [], mapcode: [] };
-const ZERO_COUNTS: StatsCounts = { "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 0 };
+const NO_ROWS: StatsKindCounts[] = [];
 
 let app: FastifyInstance;
 let queryCalls: ReplayQueryArgs[];
 let queryResult: ReplayColumns;
 let statsCalls: number[];
-let statsResult: StatsCounts;
+let statsResult: StatsKindCounts[];
 
 beforeAll(async () => {
   const mapcodeService = createMapcodeService();
@@ -58,7 +58,7 @@ beforeEach(() => {
   queryCalls = [];
   queryResult = EMPTY;
   statsCalls = [];
-  statsResult = ZERO_COUNTS;
+  statsResult = NO_ROWS;
 });
 
 describe("auth", () => {
@@ -160,8 +160,8 @@ describe("stats", () => {
     expect(statsCalls).toHaveLength(0);
   });
 
-  it("returns totals and avgPerHour with CORS and a short cache", async () => {
-    statsResult = { "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, all: 2400000 };
+  it("returns totals, avgPerHour, and byKind with CORS and a short cache", async () => {
+    statsResult = [{ kind: 10, "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, all: 2400000 }];
     const before = Math.floor(Date.now() / 1000);
     const res = await app.inject({ method: "GET", url: "/mapcode/replay/stats", headers: AUTH });
     expect(res.statusCode).toBe(200);
@@ -169,8 +169,15 @@ describe("stats", () => {
     expect(res.headers["access-control-allow-origin"]).toBe("*");
     expect(res.headers["cache-control"]).toBe("private, max-age=60");
     const body = JSON.parse(res.body);
-    expect(body.totals).toEqual(statsResult);
+    expect(body.totals).toEqual({ "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, all: 2400000 });
     expect(body.avgPerHour).toEqual({ "1d": 213.4, "7d": 238.7, "31d": 215.1, "1y": 216.9 });
+    expect(body.byKind).toEqual([
+      {
+        kind: 10,
+        name: "codes",
+        totals: { "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, all: 2400000 },
+      },
+    ]);
     expect(Math.abs(body.now - before)).toBeLessThanOrEqual(2);
     expect(statsCalls).toEqual([body.now]);
   });

@@ -40,7 +40,12 @@ export interface StatsCounts {
   all: number;
 }
 
-export type StatsQueryFn = (nowEpochSeconds: number) => Promise<StatsCounts>;
+/** One result row: the window counts for a single endpoint kind. */
+export interface StatsKindCounts extends StatsCounts {
+  kind: number;
+}
+
+export type StatsQueryFn = (nowEpochSeconds: number) => Promise<StatsKindCounts[]>;
 
 // KIND.replay (src/routes/recording.ts): historical rows from before replay
 // traffic stopped being recorded — meta-traffic, excluded from every window.
@@ -50,17 +55,19 @@ export function buildStatsQuery(nowEpochSeconds: number): { text: string; values
   const filters = STATS_WINDOWS.map(
     (w, i) => `count(*) FILTER (WHERE ts >= $${i + 1}) AS c_${w.key}`
   );
-  const text = `SELECT ${filters.join(", ")}, count(*) AS c_all FROM mapcode_request WHERE kind <> ${REPLAY_KIND}`;
+  const text =
+    `SELECT kind, ${filters.join(", ")}, count(*) AS c_all` +
+    ` FROM mapcode_request WHERE kind <> ${REPLAY_KIND} GROUP BY kind`;
   const values = STATS_WINDOWS.map((w) => nowEpochSeconds - w.seconds);
   return { text, values };
 }
 
-export async function queryStats(pool: RecorderPool, nowEpochSeconds: number): Promise<StatsCounts> {
+export async function queryStats(pool: RecorderPool, nowEpochSeconds: number): Promise<StatsKindCounts[]> {
   const { text, values } = buildStatsQuery(nowEpochSeconds);
-  // count(*) is int8, which pg returns as a string.
-  const result = (await pool.query(text, values)) as { rows: Record<string, string>[] };
-  const row = result.rows[0];
-  return {
+  // count(*) is int8, which pg returns as a string; kind (int2) stays a number.
+  const result = (await pool.query(text, values)) as { rows: Record<string, string | number>[] };
+  return result.rows.map((row) => ({
+    kind: Number(row.kind),
     "1m": Number(row.c_1m),
     "1h": Number(row.c_1h),
     "1d": Number(row.c_1d),
@@ -68,5 +75,5 @@ export async function queryStats(pool: RecorderPool, nowEpochSeconds: number): P
     "31d": Number(row.c_31d),
     "1y": Number(row.c_1y),
     all: Number(row.c_all),
-  };
+  }));
 }

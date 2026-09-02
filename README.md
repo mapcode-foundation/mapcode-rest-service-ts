@@ -195,13 +195,20 @@ not recorded, and historical replay rows are excluded from the counts:
 {
   "now": 1756800000,
   "totals": { "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, "all": 2400000 },
-  "avgPerHour": { "1d": 213.4, "7d": 238.7, "31d": 215.1, "1y": 216.9 }
+  "avgPerHour": { "1d": 213.4, "7d": 238.7, "31d": 215.1, "1y": 216.9 },
+  "byKind": [
+    { "kind": 2, "name": "status", "totals": { "1m": 10, "1h": 300, "1d": 5000, "7d": 40000, "31d": 160000, "1y": 1900000, "all": 2399000 } },
+    { "kind": 10, "name": "codes", "totals": { "1m": 2, "1h": 41, "1d": 121, "7d": 100, "31d": 2, "1y": 3, "all": 1000 } }
+  ]
 }
 ```
 
 `avgPerHour` is `totals[w] / hours(w)` rounded to one decimal, for the windows
 from 1d up (shorter windows are too bursty to average; `all` has an unknown
-span). Responses carry `Cache-Control: private, max-age=60`.
+span). `byKind` breaks the same window counts down per endpoint kind (the
+`KIND` vocabulary in `src/routes/recording.ts`), sorted by all-time count
+descending; kinds with no rows are omitted, and `totals` are the column sums
+of `byKind`. Responses carry `Cache-Control: private, max-age=60`.
 
 ## Project layout
 
