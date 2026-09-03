@@ -74,9 +74,9 @@ describe("recorded kinds and coordinates", () => {
     expect((await inject("/mapcode/json/codes/52.376514,4.908543")).kind).toBe(KIND.codes);
   });
 
-  it("records a failed encode with condensed status and NULL coords", async () => {
-    const e = await inject("/mapcode/codes/91,0");
-    expect(e).toMatchObject({ kind: KIND.codes, lat: null, lon: null, status: 40 });
+  it("does not record a failed (invalid) encode", async () => {
+    await app.inject({ method: "GET", url: "/mapcode/codes/91,0" }); // 400
+    expect(events).toHaveLength(0);
   });
 
   it("records a decode with the decoded point and the raw mapcode", async () => {
@@ -98,29 +98,36 @@ describe("recorded kinds and coordinates", () => {
     expect(e.lon).toBe(Math.round(rect.getCenter().getLonDeg() * 1e6));
   });
 
-  it("records a failed decode with NULL coords but its kind", async () => {
-    const e = await inject("/mapcode/coords/not-a-mapcode");
-    expect(e).toMatchObject({ kind: KIND.coords, lat: null, lon: null, status: 40, mapcode: null });
+  it("does not record a failed (invalid) decode", async () => {
+    await app.inject({ method: "GET", url: "/mapcode/coords/not-a-mapcode" }); // 400
+    expect(events).toHaveLength(0);
   });
 
   it("records non-geo endpoints with NULL coords", async () => {
     expect(await inject("/mapcode")).toMatchObject({ kind: KIND.help, lat: null, lon: null, status: 20 });
-    expect(await inject("/mapcode/version")).toMatchObject({ kind: KIND.version, lat: null });
-    expect(await inject("/mapcode/status")).toMatchObject({ kind: KIND.status, lat: null });
     expect(await inject("/mapcode/territories")).toMatchObject({ kind: KIND.territories, lat: null });
     expect(await inject("/mapcode/territories/NLD")).toMatchObject({ kind: KIND.territory, lat: null });
     expect(await inject("/mapcode/alphabets")).toMatchObject({ kind: KIND.alphabets, lat: null });
     expect(await inject("/mapcode/alphabets/roman")).toMatchObject({ kind: KIND.alphabet, lat: null });
   });
 
-  it("records the forbidden bare-path calls under their endpoint kind", async () => {
-    expect(await inject("/mapcode/codes")).toMatchObject({ kind: KIND.codes, status: 43 });
-    expect(await inject("/mapcode/coords")).toMatchObject({ kind: KIND.coords, status: 43 });
+  it("does not record forbidden bare paths, unmatched routes, or bad methods", async () => {
+    for (const [url, method] of [
+      ["/mapcode/codes", "GET"], // 403
+      ["/mapcode/coords", "GET"], // 403
+      ["/mapcode/no-such-route", "GET"], // 404
+      ["/mapcode/version", "POST"], // 405
+    ] as const) {
+      await app.inject({ method: method as "GET", url });
+    }
+    expect(events).toHaveLength(0);
   });
 
-  it("records unmatched routes and bad methods as kind 99", async () => {
-    expect(await inject("/mapcode/no-such-route")).toMatchObject({ kind: KIND.unmatched, status: 44 });
-    expect(await inject("/mapcode/version", "POST")).toMatchObject({ kind: KIND.unmatched, status: 45 });
+  it("does not record successful health-check and version calls", async () => {
+    await app.inject({ method: "GET", url: "/mapcode/status" }); // 200
+    await app.inject({ method: "GET", url: "/mapcode/version" }); // 200
+    await app.inject({ method: "GET", url: "/mapcode/xml/version" }); // 200, alias
+    expect(events).toHaveLength(0);
   });
 });
 
@@ -155,9 +162,10 @@ describe("replay endpoints are never recorded", () => {
       headers: { authorization: "Bearer t" },
     });
     expect(events).toHaveLength(0);
-    // A lookalike prefix is normal unmatched traffic and still records.
+    // A lookalike prefix is not treated as replay-family; it still goes through
+    // the normal rules (and records nothing here only because a 404 is invalid).
     await withReplay.inject({ method: "GET", url: "/mapcode/replayground" });
-    expect(events).toMatchObject([{ kind: KIND.unmatched }]);
+    expect(events).toHaveLength(0);
     await withReplay.close();
   });
 
@@ -170,25 +178,25 @@ describe("replay endpoints are never recorded", () => {
 describe("allowLog", () => {
   it("suppresses recording for false/0/no (case-insensitive)", async () => {
     for (const v of ["false", "FALSE", "0", "no", "No"]) {
-      await app.inject({ method: "GET", url: `/mapcode/version?allowLog=${v}` });
+      await app.inject({ method: "GET", url: `/mapcode/territories?allowLog=${v}` });
     }
     expect(events).toHaveLength(0);
   });
 
   it("records for absent, true, or garbage values", async () => {
-    await app.inject({ method: "GET", url: "/mapcode/version?allowLog=true" });
-    await app.inject({ method: "GET", url: "/mapcode/version?allowLog=banana" });
+    await app.inject({ method: "GET", url: "/mapcode/territories?allowLog=true" });
+    await app.inject({ method: "GET", url: "/mapcode/territories?allowLog=banana" });
     expect(events).toHaveLength(2);
   });
 });
 
 describe("client mapping", () => {
   it("maps the client query param and never stores the string", async () => {
-    expect((await inject("/mapcode/version?client=web")).client).toBe(1);
-    expect((await inject("/mapcode/version?client=Android")).client).toBe(2);
-    expect((await inject("/mapcode/version?client=ios")).client).toBe(3);
-    expect((await inject("/mapcode/version?client=curl")).client).toBe(4);
-    expect((await inject("/mapcode/version")).client).toBe(0);
+    expect((await inject("/mapcode/territories?client=web")).client).toBe(1);
+    expect((await inject("/mapcode/territories?client=Android")).client).toBe(2);
+    expect((await inject("/mapcode/territories?client=ios")).client).toBe(3);
+    expect((await inject("/mapcode/territories?client=curl")).client).toBe(4);
+    expect((await inject("/mapcode/territories")).client).toBe(0);
   });
 });
 

@@ -166,6 +166,10 @@ serialized error attached.
 When `MAPCODE_DB_URL` is set, the service records a bounded, best-effort log of
 incoming requests to Postgres (fire-and-forget; recording never affects API
 latency or availability) and registers `GET /mapcode/replay` to read it back.
+Only successful (status < 400) calls to real API endpoints are recorded:
+`/mapcode/status` and `/mapcode/version` (monitoring noise), the replay
+endpoints (meta-traffic), and invalid calls (bad parameters, unknown routes,
+bad methods) are not.
 
 `GET /mapcode/replay` is token-protected — it requires
 `Authorization: Bearer <MAPCODE_REPLAY_TOKEN>`, else 401. It is JSON-only (no

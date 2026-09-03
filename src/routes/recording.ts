@@ -24,6 +24,8 @@ import type { RequestRecorder } from "../storage/request-recorder.ts";
 /** Endpoint identity codes (smallint in the database, gapped for growth). */
 export const KIND = {
   help: 0,
+  // version/status: historical rows only — monitoring noise is no longer
+  // recorded (see createRecordingHook), like the replay kind below.
   version: 1,
   status: 2,
   codes: 10,
@@ -164,23 +166,30 @@ export function rawQueryValue(query: unknown, name: string): string | undefined 
 export function createRecordingHook(recorder: RequestRecorder) {
   return function recordRequest(request: FastifyRequest, reply: FastifyReply, done: () => void): void {
     try {
-      // CORS preflights are transport noise, not API usage.
+      // Only successful calls to real API endpoints are usage: CORS preflights
+      // and the replay family are transport/meta noise, invalid calls (4xx —
+      // bad params, unknown routes, bad methods) and 5xx are not usage, and
+      // status/version are monitoring noise.
       if (
         request.method.toUpperCase() !== "OPTIONS" &&
+        reply.statusCode < 400 &&
         !isReplayFamilyUrl(request.url) &&
         !allowLogDenies(rawQueryValue(request.query, "allowLog"))
       ) {
         const stash = request.recording;
         const typeParam = (request.params as Record<string, string> | null)?.["type"];
-        recorder.record({
-          ts: Math.floor(Date.now() / 1000),
-          kind: stash?.kind ?? kindFromRoute(request.routeOptions?.url, typeParam),
-          lat: stash?.latDeg !== undefined ? latToMicro(stash.latDeg) : null,
-          lon: stash?.lonDeg !== undefined ? lonToMicro(stash.lonDeg) : null,
-          status: condenseStatus(reply.statusCode),
-          client: clientToCode(rawQueryValue(request.query, "client")),
-          mapcode: stash?.mapcode ?? null,
-        });
+        const kind = stash?.kind ?? kindFromRoute(request.routeOptions?.url, typeParam);
+        if (kind !== KIND.status && kind !== KIND.version) {
+          recorder.record({
+            ts: Math.floor(Date.now() / 1000),
+            kind,
+            lat: stash?.latDeg !== undefined ? latToMicro(stash.latDeg) : null,
+            lon: stash?.lonDeg !== undefined ? lonToMicro(stash.lonDeg) : null,
+            status: condenseStatus(reply.statusCode),
+            client: clientToCode(rawQueryValue(request.query, "client")),
+            mapcode: stash?.mapcode ?? null,
+          });
+        }
       }
     } catch {
       // Swallow everything: recording must never affect a response.
