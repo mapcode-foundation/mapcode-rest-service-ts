@@ -19,12 +19,13 @@ import { buildServer } from "../src/server.ts";
 import { createMapcodeService } from "../src/domain/mapcode-service.ts";
 import { BoundaryService } from "../src/domain/boundary-service.ts";
 import type { ReplayColumns, ReplayQueryArgs } from "../src/storage/replay-query.ts";
-import type { StatsKindCounts } from "../src/storage/stats-query.ts";
+import type { StatsKindCounts, StorageInfo } from "../src/storage/stats-query.ts";
 
 const TOKEN = "test-token";
 const AUTH = { authorization: `Bearer ${TOKEN}` };
 const EMPTY: ReplayColumns = { ts: [], kind: [], lat: [], lon: [], status: [], client: [], mapcode: [] };
 const NO_ROWS: StatsKindCounts[] = [];
+const STORAGE: StorageInfo = { databaseBytes: 116_000_000, tableBytes: 105_600_000, rowCount: 2_400_000 };
 
 let app: FastifyInstance;
 let queryCalls: ReplayQueryArgs[];
@@ -49,6 +50,7 @@ beforeAll(async () => {
         statsCalls.push(now);
         return statsResult;
       },
+      storage: async () => STORAGE,
     },
   });
   await app.ready();
@@ -160,7 +162,7 @@ describe("stats", () => {
     expect(statsCalls).toHaveLength(0);
   });
 
-  it("returns totals, avgPerHour, and byKind with CORS and a short cache", async () => {
+  it("returns totals, avgPerHour, byKind, and storage with CORS and a short cache", async () => {
     statsResult = [{ kind: 10, "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, all: 2400000 }];
     const before = Math.floor(Date.now() / 1000);
     const res = await app.inject({ method: "GET", url: "/mapcode/replay/stats", headers: AUTH });
@@ -178,6 +180,13 @@ describe("stats", () => {
         totals: { "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, all: 2400000 },
       },
     ]);
+    expect(body.storage).toEqual({
+      databaseBytes: 116_000_000,
+      tableBytes: 105_600_000,
+      rowCount: 2_400_000,
+      bytesPerRow: 44,
+      bytesPerDay: 225_324, // 44 bytes/row * 5121 events in the last day
+    });
     expect(Math.abs(body.now - before)).toBeLessThanOrEqual(2);
     expect(statsCalls).toEqual([body.now]);
   });

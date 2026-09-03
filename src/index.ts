@@ -18,7 +18,7 @@ import { createMapcodeService } from "./domain/mapcode-service.ts";
 import { createPool } from "./storage/pool.ts";
 import { createRequestRecorder } from "./storage/request-recorder.ts";
 import { queryReplay } from "./storage/replay-query.ts";
-import { queryStats } from "./storage/stats-query.ts";
+import { queryStats, queryStorage } from "./storage/stats-query.ts";
 import { buildServer } from "./server.ts";
 
 async function main(): Promise<void> {
@@ -45,6 +45,7 @@ async function main(): Promise<void> {
             token: config.replayToken,
             query: (args) => queryReplay(pool, args),
             stats: (now) => queryStats(pool, now),
+            storage: () => queryStorage(pool),
           }
         : undefined,
   });

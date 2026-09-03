@@ -22,7 +22,7 @@ import { Pool } from "pg";
 import { ensureSchema } from "../src/storage/schema.ts";
 import { createRequestRecorder } from "../src/storage/request-recorder.ts";
 import { queryReplay } from "../src/storage/replay-query.ts";
-import { queryStats } from "../src/storage/stats-query.ts";
+import { queryStats, queryStorage } from "../src/storage/stats-query.ts";
 
 const dbUrl = process.env.TEST_DB_URL;
 
@@ -82,6 +82,13 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
     expect(total("all")).toBe(5); // 3 rows from the replay round-trip test + these 2; the kind-50 row is excluded
     expect(rows.find((r) => r.kind === 10)?.all).toBe(3); // ts=1000 round-trip row + these 2
     expect(rows.some((r) => r.kind === 50)).toBe(false);
+  });
+
+  it("measures storage sizes and the exact row count", async () => {
+    const info = await queryStorage(pool);
+    expect(info.rowCount).toBe(6); // all rows, the kind-50 one included
+    expect(info.tableBytes).toBeGreaterThan(0);
+    expect(info.databaseBytes).toBeGreaterThan(info.tableBytes);
   });
 
   it("uses the BRIN index for the range scan", async () => {

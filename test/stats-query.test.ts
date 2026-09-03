@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { describe, it, expect } from "vitest";
-import { buildStatsQuery, queryStats } from "../src/storage/stats-query.ts";
+import { buildStatsQuery, queryStats, STORAGE_SQL, queryStorage } from "../src/storage/stats-query.ts";
 
 const NOW = 1_737_100_000;
 
@@ -63,5 +63,16 @@ describe("queryStats", () => {
   it("returns an empty list for an empty table", async () => {
     const pool = { query: async () => ({ rows: [] }) };
     expect(await queryStats(pool, NOW)).toEqual([]);
+  });
+});
+
+describe("queryStorage", () => {
+  it("measures the database, the table, and the exact row count", async () => {
+    expect(STORAGE_SQL).toContain("pg_database_size(current_database())");
+    expect(STORAGE_SQL).toContain("pg_total_relation_size('mapcode_request')");
+    expect(STORAGE_SQL).toContain("count(*)");
+    // pg returns int8 sizes/counts as strings.
+    const pool = { query: async () => ({ rows: [{ db_bytes: "8000000", table_bytes: "105600000", row_count: "2400000" }] }) };
+    expect(await queryStorage(pool)).toEqual({ databaseBytes: 8_000_000, tableBytes: 105_600_000, rowCount: 2_400_000 });
   });
 });

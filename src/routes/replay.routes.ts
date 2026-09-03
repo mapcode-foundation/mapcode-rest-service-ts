@@ -77,7 +77,7 @@ export function registerReplayRoutes(app: FastifyInstance, deps: ServerDeps): vo
     if (!bearerTokenMatches(request.headers.authorization, replay.token)) {
       throw new ApiUnauthorizedError("Missing or invalid Bearer token");
     }
-    const { dto, cacheControl } = await handleReplayStats(Math.floor(Date.now() / 1000), replay.stats);
+    const { dto, cacheControl } = await handleReplayStats(Math.floor(Date.now() / 1000), replay.stats, replay.storage);
     return reply
       .code(200)
       .header("cache-control", cacheControl)

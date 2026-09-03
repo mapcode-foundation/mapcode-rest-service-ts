@@ -62,6 +62,34 @@ export function buildStatsQuery(nowEpochSeconds: number): { text: string; values
   return { text, values };
 }
 
+/** Current storage footprint, for the stats endpoint's burn-rate block. */
+export interface StorageInfo {
+  databaseBytes: number;
+  tableBytes: number;
+  rowCount: number;
+}
+
+export type StorageQueryFn = () => Promise<StorageInfo>;
+
+// pg_total_relation_size includes the BRIN index and toast. The exact count(*)
+// costs one table scan, same as the per-kind aggregate — acceptable behind the
+// endpoint's 60s cache.
+export const STORAGE_SQL =
+  "SELECT pg_database_size(current_database()) AS db_bytes," +
+  " pg_total_relation_size('mapcode_request') AS table_bytes," +
+  " (SELECT count(*) FROM mapcode_request) AS row_count";
+
+export async function queryStorage(pool: RecorderPool): Promise<StorageInfo> {
+  // int8 sizes/counts come back from pg as strings.
+  const result = (await pool.query(STORAGE_SQL)) as { rows: Record<string, string>[] };
+  const row = result.rows[0];
+  return {
+    databaseBytes: Number(row.db_bytes),
+    tableBytes: Number(row.table_bytes),
+    rowCount: Number(row.row_count),
+  };
+}
+
 export async function queryStats(pool: RecorderPool, nowEpochSeconds: number): Promise<StatsKindCounts[]> {
   const { text, values } = buildStatsQuery(nowEpochSeconds);
   // count(*) is int8, which pg returns as a string; kind (int2) stays a number.

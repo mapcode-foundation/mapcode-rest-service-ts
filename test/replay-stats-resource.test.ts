@@ -15,9 +15,12 @@
 import { describe, it, expect } from "vitest";
 import { handleReplayStats, STATS_CACHE_SECONDS } from "../src/resources/replay-stats.ts";
 import { ApiError } from "../src/errors.ts";
-import type { StatsKindCounts } from "../src/storage/stats-query.ts";
+import type { StatsKindCounts, StorageInfo } from "../src/storage/stats-query.ts";
 
 const NOW = 1_737_100_000;
+// tableBytes / rowCount is exactly 44; rowCount exceeds totals.all (historical replay rows).
+const STORAGE: StorageInfo = { databaseBytes: 116_000_000, tableBytes: 105_600_000, rowCount: 2_400_000 };
+const storageQuery = async () => STORAGE;
 // Two kinds whose window sums equal the totals asserted below.
 const ROWS: StatsKindCounts[] = [
   { kind: 10, "1m": 2, "1h": 41, "1d": 121, "7d": 100, "31d": 2, "1y": 3, all: 1000 },
@@ -30,7 +33,7 @@ describe("handleReplayStats", () => {
     const { dto, cacheControl } = await handleReplayStats(NOW, async (now) => {
       seen.push(now);
       return ROWS;
-    });
+    }, storageQuery);
     expect(seen).toEqual([NOW]);
     expect(dto).toEqual({
       now: NOW,
@@ -54,34 +57,50 @@ describe("handleReplayStats", () => {
           totals: { "1m": 2, "1h": 41, "1d": 121, "7d": 100, "31d": 2, "1y": 3, all: 1000 },
         },
       ],
+      storage: {
+        databaseBytes: 116_000_000,
+        tableBytes: 105_600_000,
+        rowCount: 2_400_000,
+        bytesPerRow: 44, // 105600000 / 2400000
+        bytesPerDay: 225_324, // 44 * 5121 events in the last day
+      },
     });
     expect(cacheControl).toBe(`private, max-age=${STATS_CACHE_SECONDS}`);
   });
 
-  it("returns zero totals and an empty byKind for an empty database", async () => {
-    const { dto } = await handleReplayStats(NOW, async () => []);
+  it("returns zero totals, empty byKind, and a zero burn rate for an empty database", async () => {
+    const { dto } = await handleReplayStats(NOW, async () => [], async () => ({
+      databaseBytes: 8_000_000,
+      tableBytes: 0,
+      rowCount: 0,
+    }));
     expect(dto).toEqual({
       now: NOW,
       totals: { "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 0 },
       avgPerHour: { "1d": 0, "7d": 0, "31d": 0, "1y": 0 },
       byKind: [],
+      storage: { databaseBytes: 8_000_000, tableBytes: 0, rowCount: 0, bytesPerRow: 0, bytesPerDay: 0 },
     });
   });
 
   it("labels a kind missing from the vocabulary as unknown", async () => {
     const { dto } = await handleReplayStats(NOW, async () => [
       { kind: 77, "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 1 },
-    ]);
+    ], storageQuery);
     expect((dto.byKind as { kind: number; name: string }[])[0]).toMatchObject({ kind: 77, name: "unknown" });
   });
 
-  it("masks query failures as a plain 500 (no pg error text)", async () => {
-    await expect(
-      handleReplayStats(NOW, async () => {
-        throw new Error("connection to host db-internal.example failed");
-      })
-    ).rejects.toSatisfy(
-      (err: unknown) => err instanceof ApiError && err.httpStatus === 500 && !err.message.includes("db-internal")
-    );
+  it("masks failures of either query as a plain 500 (no pg error text)", async () => {
+    const boom = async (): Promise<never> => {
+      throw new Error("connection to host db-internal.example failed");
+    };
+    for (const [stats, storage] of [
+      [boom, storageQuery],
+      [async () => ROWS, boom],
+    ] as const) {
+      await expect(handleReplayStats(NOW, stats, storage)).rejects.toSatisfy(
+        (err: unknown) => err instanceof ApiError && err.httpStatus === 500 && !err.message.includes("db-internal")
+      );
+    }
   });
 });

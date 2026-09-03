@@ -32,7 +32,7 @@ import { createRecordingHook } from "./routes/recording.ts";
 import type { RequestRecorder } from "./storage/request-recorder.ts";
 import { registerReplayRoutes } from "./routes/replay.routes.ts";
 import type { ReplayQueryFn } from "./storage/replay-query.ts";
-import type { StatsQueryFn } from "./storage/stats-query.ts";
+import type { StatsQueryFn, StorageQueryFn } from "./storage/stats-query.ts";
 
 // ---------------------------------------------------------------------------
 // ServerDeps — passed to all route modules
@@ -46,7 +46,7 @@ export interface ServerDeps {
   /** Optional request recorder; absent → no recording hook is installed. */
   recorder?: RequestRecorder;
   /** Replay endpoints config; absent → /mapcode/replay[/stats] is not registered. */
-  replay?: { token: string; query: ReplayQueryFn; stats: StatsQueryFn };
+  replay?: { token: string; query: ReplayQueryFn; stats: StatsQueryFn; storage: StorageQueryFn };
 }
 
 // ---------------------------------------------------------------------------

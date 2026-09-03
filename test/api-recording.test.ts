@@ -135,6 +135,7 @@ describe("replay endpoints are never recorded", () => {
         token: "t",
         query: async () => ({ ts: [], kind: [], lat: [], lon: [], status: [], client: [], mapcode: [] }),
         stats: async () => [],
+        storage: async () => ({ databaseBytes: 0, tableBytes: 0, rowCount: 0 }),
       },
     });
     await withReplay.ready();

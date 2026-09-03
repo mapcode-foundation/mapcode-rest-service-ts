@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { ApiError } from "../errors.ts";
-import { STATS_WINDOWS, type StatsCounts, type StatsQueryFn } from "../storage/stats-query.ts";
+import { STATS_WINDOWS, type StatsCounts, type StatsQueryFn, type StorageQueryFn } from "../storage/stats-query.ts";
 import { KIND } from "../routes/recording.ts";
 
 // ---------------------------------------------------------------------------
@@ -38,10 +38,15 @@ export interface ReplayStatsResult {
   cacheControl: string;
 }
 
-export async function handleReplayStats(nowEpochSeconds: number, query: StatsQueryFn): Promise<ReplayStatsResult> {
+export async function handleReplayStats(
+  nowEpochSeconds: number,
+  query: StatsQueryFn,
+  storageQuery: StorageQueryFn
+): Promise<ReplayStatsResult> {
   let rows;
+  let storageInfo;
   try {
-    rows = await query(nowEpochSeconds);
+    [rows, storageInfo] = await Promise.all([query(nowEpochSeconds), storageQuery()]);
   } catch {
     // Never let raw pg error text (hostnames, usernames, ...) reach the response body.
     throw new ApiError(500, "Internal Server Error");
@@ -63,8 +68,17 @@ export async function handleReplayStats(nowEpochSeconds: number, query: StatsQue
   const byKind = [...rows]
     .sort((a, b) => b.all - a.all)
     .map(({ kind, ...counts }) => ({ kind, name: KIND_NAMES[kind] ?? "unknown", totals: counts }));
+  // Burn rate: last-day event count times the average on-disk footprint per
+  // row (indexes included). rowCount is the physical row count — it can exceed
+  // totals.all because historical replay rows still occupy space.
+  const bytesPerRowExact = storageInfo.rowCount > 0 ? storageInfo.tableBytes / storageInfo.rowCount : 0;
+  const storage = {
+    ...storageInfo,
+    bytesPerRow: Math.round(bytesPerRowExact),
+    bytesPerDay: Math.round(bytesPerRowExact * totals["1d"]),
+  };
   return {
-    dto: { now: nowEpochSeconds, totals, avgPerHour, byKind },
+    dto: { now: nowEpochSeconds, totals, avgPerHour, byKind, storage },
     cacheControl: `private, max-age=${STATS_CACHE_SECONDS}`,
   };
 }
