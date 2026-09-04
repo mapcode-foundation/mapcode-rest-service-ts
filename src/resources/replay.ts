@@ -20,11 +20,11 @@ import type { ReplayQueryFn } from "../storage/replay-query.ts";
 // handleReplay — framework-agnostic handler for GET /mapcode/replay.
 // With the btree on ts, ORDER BY ts LIMIT n is an index range scan that stops
 // after n rows, so the window cap bounds the client payload rather than the
-// server-side scan. 1M rows is ~50 MB of JSON before compression.
+// server-side scan. 200k rows is ~10 MB of JSON before compression.
 // ---------------------------------------------------------------------------
 
 export const REPLAY_LIMIT_DEFAULT = 50_000;
-export const REPLAY_LIMIT_MAX = 1_000_000;
+export const REPLAY_LIMIT_MAX = 200_000;
 export const REPLAY_WINDOW_MAX_SECONDS = 365 * 24 * 3600; // 365 days
 export const REPLAY_CACHE_HORIZON_SECONDS = 60;
 
