@@ -179,10 +179,10 @@ bad methods) are not.
 |---|---|---|
 | `from` | _(required)_ | Window start, epoch seconds (inclusive). |
 | `to` | now | Window end, epoch seconds (exclusive). |
-| `limit` | `50000` | Max rows returned; max `200000`. |
+| `limit` | `50000` | Max rows returned; max `500000`. |
 | `kind` | _(all)_ | Comma-separated list of endpoint-kind numbers to filter on. |
 
-The window (`to - from`) is capped at 31 days. The response is a columnar JSON
+The window (`to - from`) is capped at 365 days. The response is a columnar JSON
 object (`{from, to, count, truncated, ts, kind, lat, lon, status, client,
 mapcode}`) shaped for a canvas/WebGL renderer to iterate directly. Windows
 that end more than a minute in the past are cacheable

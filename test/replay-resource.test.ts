@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { describe, it, expect } from "vitest";
-import { handleReplay, REPLAY_WINDOW_MAX_SECONDS } from "../src/resources/replay.ts";
+import { handleReplay, REPLAY_WINDOW_MAX_SECONDS, REPLAY_LIMIT_MAX } from "../src/resources/replay.ts";
 import { ApiError } from "../src/errors.ts";
 import type { ReplayColumns, ReplayQueryArgs } from "../src/storage/replay-query.ts";
 
@@ -49,15 +49,21 @@ describe("handleReplay validation", () => {
     await expect400({ from: "1000", to: "1000" });
     await expect400({ from: "1000", to: "999" });
   });
-  it("caps the window at 31 days", async () => {
+  it("caps the window at 365 days", async () => {
+    expect(REPLAY_WINDOW_MAX_SECONDS).toBe(365 * 24 * 3600);
     await expect400({ from: "1000", to: String(1000 + REPLAY_WINDOW_MAX_SECONDS + 1) });
     const { fn } = fakeQuery();
-    await handleReplay({ from: "1000", to: String(1000 + REPLAY_WINDOW_MAX_SECONDS) }, NOW, fn); // exactly 31d OK
+    await handleReplay({ from: "1000", to: String(1000 + REPLAY_WINDOW_MAX_SECONDS) }, NOW, fn); // exactly 365d OK
   });
-  it("bounds limit to [1, 200000]", async () => {
+  it("bounds limit to [1, 500000] and defaults to 50000", async () => {
+    expect(REPLAY_LIMIT_MAX).toBe(500_000);
     await expect400({ from: "1000", to: "2000", limit: "0" });
-    await expect400({ from: "1000", to: "2000", limit: "200001" });
+    await expect400({ from: "1000", to: "2000", limit: "500001" });
     await expect400({ from: "1000", to: "2000", limit: "ten" });
+    const { calls, fn } = fakeQuery();
+    await handleReplay({ from: "1000", to: "2000", limit: "500000" }, NOW, fn);
+    await handleReplay({ from: "1000", to: "2000" }, NOW, fn);
+    expect(calls.map((c) => c.limit)).toEqual([500_000, 50_000]);
   });
   it("rejects malformed kind lists", async () => {
     await expect400({ from: "1000", to: "2000", kind: "10,x" });

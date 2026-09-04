@@ -18,14 +18,14 @@ import type { ReplayQueryFn } from "../storage/replay-query.ts";
 
 // ---------------------------------------------------------------------------
 // handleReplay — framework-agnostic handler for GET /mapcode/replay.
-// The window is capped because the BRIN index cannot supply ordering:
-// ORDER BY ts LIMIT n scans the whole [from, to) range before it knows the
-// first n rows, so bounding the window bounds the scan.
+// With the btree on ts, ORDER BY ts LIMIT n is an index range scan that stops
+// after n rows, so the window cap bounds the client payload rather than the
+// server-side scan. 500k rows is ~25 MB of JSON before compression.
 // ---------------------------------------------------------------------------
 
 export const REPLAY_LIMIT_DEFAULT = 50_000;
-export const REPLAY_LIMIT_MAX = 200_000;
-export const REPLAY_WINDOW_MAX_SECONDS = 31 * 24 * 3600; // 31 days
+export const REPLAY_LIMIT_MAX = 500_000;
+export const REPLAY_WINDOW_MAX_SECONDS = 365 * 24 * 3600; // 365 days
 export const REPLAY_CACHE_HORIZON_SECONDS = 60;
 
 export interface ReplayParams {
@@ -64,7 +64,7 @@ export async function handleReplay(
     throw new ApiInvalidFormatError("to", params.to ?? String(to), "epoch seconds > from");
   }
   if (to - from > REPLAY_WINDOW_MAX_SECONDS) {
-    throw new ApiInvalidFormatError("to", params.to ?? String(to), "window of at most 31 days after from");
+    throw new ApiInvalidFormatError("to", params.to ?? String(to), "window of at most 365 days after from");
   }
 
   let limit = REPLAY_LIMIT_DEFAULT;
