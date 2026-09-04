@@ -55,15 +55,15 @@ describe("handleReplay validation", () => {
     const { fn } = fakeQuery();
     await handleReplay({ from: "1000", to: String(1000 + REPLAY_WINDOW_MAX_SECONDS) }, NOW, fn); // exactly 365d OK
   });
-  it("bounds limit to [1, 500000] and defaults to 50000", async () => {
-    expect(REPLAY_LIMIT_MAX).toBe(500_000);
+  it("bounds limit to [1, 1000000] and defaults to 50000", async () => {
+    expect(REPLAY_LIMIT_MAX).toBe(1_000_000);
     await expect400({ from: "1000", to: "2000", limit: "0" });
-    await expect400({ from: "1000", to: "2000", limit: "500001" });
+    await expect400({ from: "1000", to: "2000", limit: "1000001" });
     await expect400({ from: "1000", to: "2000", limit: "ten" });
     const { calls, fn } = fakeQuery();
-    await handleReplay({ from: "1000", to: "2000", limit: "500000" }, NOW, fn);
+    await handleReplay({ from: "1000", to: "2000", limit: "1000000" }, NOW, fn);
     await handleReplay({ from: "1000", to: "2000" }, NOW, fn);
-    expect(calls.map((c) => c.limit)).toEqual([500_000, 50_000]);
+    expect(calls.map((c) => c.limit)).toEqual([1_000_000, 50_000]);
   });
   it("rejects malformed kind lists", async () => {
     await expect400({ from: "1000", to: "2000", kind: "10,x" });
