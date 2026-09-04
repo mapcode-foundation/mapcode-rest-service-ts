@@ -224,6 +224,9 @@ The event table is append-only: it is never trimmed. Operations notes:
 - A btree on `ts` (`mapcode_request_ts_btree`) is built `CONCURRENTLY` at
   startup. If a build was interrupted, Postgres leaves it `INVALID` and the
   next start skips it: `DROP INDEX mapcode_request_ts_btree;` and restart.
+- The maintenance connection is a single-connection pool, so on a large
+  table the stats endpoint stays `503` until the initial btree build
+  finishes and the first scan completes.
 
 `avgPerHour` is `totals[w] / hours(w)` rounded to one decimal, for the windows
 from 1d up (shorter windows are too bursty to average; `all` has an unknown
@@ -231,11 +234,13 @@ span). `byKind` breaks the same window counts down per endpoint kind (the
 `KIND` vocabulary in `src/routes/recording.ts`), sorted by all-time count
 descending; kinds with no rows are omitted, and `totals` are the column sums
 of `byKind`. `storage` reports the current footprint (`pg_database_size`,
-`pg_total_relation_size` incl. the BRIN index, exact physical row count —
-historical replay rows included, so it can exceed `totals.all`) and the burn
-rate: `bytesPerRow` is the average on-disk footprint, `bytesPerDay` is that
-times the last-day event count. Responses carry
-`Cache-Control: private, max-age=60`.
+`pg_total_relation_size` for the event table including both its indexes —
+BRIN and btree) and the burn rate: `bytesPerRow` is the average on-disk
+footprint, `bytesPerDay` is that times the last-day event count.
+`storage.rowCount` is the cache's physical row count (the scan-time count
+plus recorder increments since; refreshed by the 6-hourly rebuild, so up to
+a few hours stale), including historical meta-traffic rows, so it can exceed
+`totals.all`. Responses carry `Cache-Control: private, max-age=60`.
 
 ## Project layout
 

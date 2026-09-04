@@ -58,13 +58,22 @@ async function main(): Promise<void> {
         : undefined,
   });
 
-  if (maintenancePool !== null) {
+  // Without a replay token nothing consumes the stats (loadConfig already
+  // rejects a DB URL without a token, so this is belt-and-braces).
+  if (maintenancePool !== null && config.replayToken !== null) {
     // Schema first (fast, transactional), then the concurrent btree build and
     // the warm-up scan — neither awaited: the API must not wait on a
     // potentially long index build or full-table scan. Message-only logging.
+    // Separate try/catch per statement: a failed schema bootstrap (e.g. a
+    // race with the recorder's own lazy ensureSchema) must not also skip the
+    // btree build for the process lifetime.
     void (async () => {
       try {
         await ensureSchema(maintenancePool);
+      } catch (err) {
+        console.warn(`schema bootstrap failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      try {
         await ensureBtreeIndex(maintenancePool);
       } catch (err) {
         console.warn(`btree index bootstrap failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -96,7 +105,7 @@ async function main(): Promise<void> {
       // Not awaited: pool.end() waits for checked-out clients, and a scan in
       // flight may hold the maintenance connection for minutes. The scan is
       // idempotent and re-runs at the next start.
-      void maintenancePool?.end();
+      void maintenancePool?.end().catch(() => {});
       await step("pool.end", async () => pool?.end());
       process.exit(failed ? 1 : 0);
     })();
