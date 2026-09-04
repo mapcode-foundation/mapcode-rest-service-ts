@@ -13,16 +13,29 @@
 // limitations under the License.
 
 import { describe, it, expect } from "vitest";
-import { poolConfig } from "../src/storage/pool.ts";
+import { poolConfig, API_POOL_TUNING, MAINTENANCE_POOL_TUNING } from "../src/storage/pool.ts";
 
 describe("poolConfig", () => {
   it("returns null when dbUrl is null", () => {
     expect(poolConfig({ dbUrl: null, dbCaCert: null })).toBeNull();
   });
 
-  it("passes the connection string through", () => {
+  it("passes the connection string through with the API statement timeout by default", () => {
     const cfg = poolConfig({ dbUrl: "postgres://u:p@h:5432/db?sslmode=require", dbCaCert: null });
-    expect(cfg).toEqual({ connectionString: "postgres://u:p@h:5432/db?sslmode=require" });
+    expect(cfg).toEqual({
+      connectionString: "postgres://u:p@h:5432/db?sslmode=require",
+      statement_timeout: 30_000,
+    });
+  });
+
+  it("applies maintenance tuning: one connection, one-hour statement timeout", () => {
+    const cfg = poolConfig({ dbUrl: "postgres://u:p@h:5432/db", dbCaCert: null }, MAINTENANCE_POOL_TUNING);
+    expect(cfg).toEqual({ connectionString: "postgres://u:p@h:5432/db", statement_timeout: 3_600_000, max: 1 });
+  });
+
+  it("exposes the tuning constants", () => {
+    expect(API_POOL_TUNING).toEqual({ statementTimeoutMs: 30_000 });
+    expect(MAINTENANCE_POOL_TUNING).toEqual({ statementTimeoutMs: 3_600_000, max: 1 });
   });
 
   it("enables verified TLS when a CA cert is configured", () => {
