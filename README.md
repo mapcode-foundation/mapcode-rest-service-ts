@@ -210,12 +210,15 @@ not recorded, and historical replay rows are excluded from the counts:
 
 Stats are served from an in-memory cache, not from a query: every recorded
 event increments per-kind time buckets, and the cache is rebuilt from one
-full scan at startup and every 6 hours (retried after 5 minutes on failure).
+full scan at startup, once more 5 minutes later (a catch-up for rows the
+outgoing instance of a rolling deploy wrote after the boot scan), then every
+hour (retried after 5 minutes on failure).
 Until the first scan completes the endpoint answers `503`. `1m`, `1h` and
 `all` are exact; `1d` starts at the minute boundary at or before `now - 1d`,
 and `7d`, `31d`, `1y` at the hour boundary at or before their start — so those
 windows are never shorter than advertised and at most one bucket longer.
-`storage.rowCount` comes from the same cache; the byte sizes are live.
+`storage.rowCount` comes from the same cache; the byte sizes are sampled on
+each rebuild, so a stats request never touches the database.
 
 The event table is append-only: it is never trimmed. Operations notes:
 
@@ -241,8 +244,8 @@ of `byKind`. `storage` reports the current footprint (`pg_database_size`,
 BRIN and btree) and the burn rate: `bytesPerRow` is the average on-disk
 footprint, `bytesPerDay` is that times the last-day event count.
 `storage.rowCount` is the cache's physical row count (the scan-time count
-plus recorder increments since; refreshed by the 6-hourly rebuild, so up to
-a few hours stale), including historical meta-traffic rows, so it can exceed
+plus recorder increments since; refreshed by the hourly rebuild), including
+historical meta-traffic rows, so it can exceed
 `totals.all`. Responses carry `Cache-Control: private, max-age=60`.
 
 ## Project layout

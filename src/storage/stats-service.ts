@@ -13,18 +13,29 @@
 // limitations under the License.
 
 import { StatsCache, type StatsEvent, type StatsScanRow } from "./stats-cache.ts";
-import type { StatsKindCounts } from "./stats-query.ts";
+import type { StatsKindCounts, StorageInfo } from "./stats-query.ts";
 
 // ---------------------------------------------------------------------------
 // StatsService — owns the StatsCache. Feeds it per persisted batch; rebuilds
-// it from a scan at startup and every 6 hours (5 min after a failure). A
-// journal bridges the gap between a scan's snapshot and its result arriving.
+// it from a scan at startup, once more 5 min later (the catch-up: a deploy
+// runs old and new instances side by side, and rows the outgoing instance
+// writes after our boot snapshot are otherwise invisible until the next
+// rebuild), then hourly; 5 min after a failure. The storage byte sizes are
+// sampled on the same rebuild, so a stats request never touches the
+// database. A journal bridges the gap between a scan's snapshot and its
+// result arriving.
 // ---------------------------------------------------------------------------
 
-export const RECALC_INTERVAL_MS = 6 * 3600 * 1000;
+export const RECALC_INTERVAL_MS = 3600 * 1000;
+export const RECALC_CATCHUP_MS = 5 * 60 * 1000;
 export const RECALC_RETRY_MS = 5 * 60 * 1000;
 
-/** Thrown by rows()/rowCount() until the first scan has completed. */
+/** Byte sizes sampled alongside the scan (stats-query.ts querySizes). */
+export type StorageSizes = Pick<StorageInfo, "databaseBytes" | "tableBytes">;
+
+const NO_SIZES: StorageSizes = { databaseBytes: 0, tableBytes: 0 };
+
+/** Thrown by rows()/rowCount()/storage() until the first scan has completed. */
 export class StatsNotReadyError extends Error {
   constructor() {
     super("stats cache not ready");
@@ -34,7 +45,11 @@ export class StatsNotReadyError extends Error {
 
 export interface StatsServiceOptions {
   recalcIntervalMs?: number;
+  /** Delay of the single extra rebuild after the first success (default RECALC_CATCHUP_MS). */
+  catchupMs?: number;
   retryMs?: number;
+  /** Storage byte sizes, sampled on every rebuild; absent → reported as 0. */
+  sizes?: () => Promise<StorageSizes>;
   warn?: (message: string) => void;
   /** Epoch seconds; injectable for tests. */
   now?: () => number;
@@ -47,6 +62,8 @@ export interface StatsService {
   rows(now: number): StatsKindCounts[];
   /** Physical row count (kind 50 included). Throws StatsNotReadyError before the first scan. */
   rowCount(): number;
+  /** Byte sizes from the last rebuild plus the live rowCount. Throws StatsNotReadyError before the first scan. */
+  storage(): StorageInfo;
   /** Rebuild from a scan now; joins an in-flight rebuild; never rejects. Schedules the next one. */
   recalc(): Promise<void>;
   /** Stop the recalc timer. */
@@ -58,11 +75,15 @@ export function createStatsService(
   options: StatsServiceOptions = {}
 ): StatsService {
   const recalcIntervalMs = options.recalcIntervalMs ?? RECALC_INTERVAL_MS;
+  const catchupMs = options.catchupMs ?? RECALC_CATCHUP_MS;
   const retryMs = options.retryMs ?? RECALC_RETRY_MS;
+  const sizes = options.sizes ?? (async () => NO_SIZES);
   const warn = options.warn ?? ((message: string) => console.warn(message));
   const now = options.now ?? (() => Math.floor(Date.now() / 1000));
 
   let cache: StatsCache | null = null;
+  let lastSizes: StorageSizes = NO_SIZES;
+  let successes = 0;
   let journal: StatsEvent[] | null = null;
   let inFlight: Promise<void> | null = null;
   let timer: NodeJS.Timeout | null = null;
@@ -87,13 +108,16 @@ export function createStatsService(
     const pending: StatsEvent[] = [];
     journal = pending;
     try {
-      const rows = await scan(now());
+      // Sizes ride along with the scan; either failing fails the rebuild as a whole.
+      const [rows, sampledSizes] = await Promise.all([scan(now()), sizes()]);
       const fresh = StatsCache.fromScan(rows);
       for (const e of pending) fresh.add(e);
       cache = fresh;
-      schedule(recalcIntervalMs);
+      lastSizes = sampledSizes;
+      successes += 1;
+      schedule(successes === 1 ? catchupMs : recalcIntervalMs);
     } catch (err) {
-      // Keep the previous cache (or stay not-ready). Message only: never the DB URL.
+      // Keep the previous cache and sizes (or stay not-ready). Message only: never the DB URL.
       warn(`stats recalc failed: ${err instanceof Error ? err.message : String(err)}`);
       schedule(retryMs);
     } finally {
@@ -122,6 +146,10 @@ export function createStatsService(
     rowCount() {
       if (cache === null) throw new StatsNotReadyError();
       return cache.snapshot(now()).rowCount;
+    },
+    storage() {
+      if (cache === null) throw new StatsNotReadyError();
+      return { ...lastSizes, rowCount: cache.snapshot(now()).rowCount };
     },
     recalc,
     close() {

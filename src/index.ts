@@ -31,10 +31,12 @@ async function main(): Promise<void> {
 
   // config.dbUrl contains a password — it must never be logged.
   // Two pools: API-path queries (30 s statement_timeout) and one maintenance
-  // connection (1 h) for the 6-hourly stats scan and the one-off btree build.
+  // connection (1 h) for the hourly stats scan and the one-off btree build.
   const pool = createPool(config);
   const maintenancePool = createPool(config, MAINTENANCE_POOL_TUNING);
-  const statsService = createStatsService((now) => scanStats(maintenancePool!, now));
+  const statsService = createStatsService((now) => scanStats(maintenancePool!, now), {
+    sizes: () => querySizes(maintenancePool!),
+  });
   const recorder = createRequestRecorder(pool, {
     onPersisted: (batch) => statsService.onPersisted(batch),
   });
@@ -53,7 +55,7 @@ async function main(): Promise<void> {
             token: config.replayToken,
             query: (args) => queryReplay(pool, args),
             stats: async (now) => statsService.rows(now),
-            storage: async () => ({ ...(await querySizes(pool)), rowCount: statsService.rowCount() }),
+            storage: async () => statsService.storage(),
           }
         : undefined,
   });

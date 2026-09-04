@@ -30,7 +30,7 @@ export interface PoolTuning {
 /** API-path queries: replay SELECT, recorder INSERT, storage-size lookup. */
 export const API_POOL_TUNING: PoolTuning = { statementTimeoutMs: 30_000 };
 
-/** Long-running maintenance: the 6-hourly stats scan and the one-off btree build. */
+/** Long-running maintenance: the hourly stats scan and the one-off btree build. */
 export const MAINTENANCE_POOL_TUNING: PoolTuning = { statementTimeoutMs: 3_600_000, max: 1 };
 
 /**

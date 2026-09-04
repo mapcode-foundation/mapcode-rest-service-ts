@@ -17,7 +17,7 @@ import { TIERS, type StatsScanRow, type StatsTier } from "./stats-cache.ts";
 
 // ---------------------------------------------------------------------------
 // Stats SQL. The per-request path never touches the database: the stats
-// endpoint is served from StatsCache. This file holds the 6-hourly rebuild
+// endpoint is served from StatsCache. This file holds the hourly rebuild
 // scan (one statement, one snapshot) and the cheap size lookup.
 // ---------------------------------------------------------------------------
 
@@ -59,7 +59,7 @@ export type StorageQueryFn = () => Promise<StorageInfo>;
 
 /**
  * One statement → one MVCC snapshot across all four tiers. The `all` branch
- * is the single full table scan; it runs every 6 hours, never per request.
+ * is the single full table scan; it runs every hour, never per request.
  * No kind filter: the cache needs kind-50 rows for the physical rowCount and
  * drops them from totals itself.
  */

@@ -18,6 +18,7 @@ import {
   StatsNotReadyError,
   RECALC_INTERVAL_MS,
   RECALC_RETRY_MS,
+  RECALC_CATCHUP_MS,
 } from "../src/storage/stats-service.ts";
 import type { StatsScanRow } from "../src/storage/stats-cache.ts";
 
@@ -141,7 +142,7 @@ describe("createStatsService", () => {
     service.close();
   });
 
-  it("schedules the next scan 6 h after success and 5 min after failure", async () => {
+  it("schedules a catch-up 5 min after the first success, then hourly, and 5 min after a failure", async () => {
     vi.useFakeTimers();
     let fail = false;
     const calls: number[] = [];
@@ -155,20 +156,84 @@ describe("createStatsService", () => {
     );
     await service.recalc();
     expect(calls).toHaveLength(1);
-    await vi.advanceTimersByTimeAsync(RECALC_INTERVAL_MS - 1);
+    // First success: a short catch-up absorbs events the outgoing instance wrote after our snapshot.
+    await vi.advanceTimersByTimeAsync(RECALC_CATCHUP_MS - 1);
     expect(calls).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(calls).toHaveLength(2); // catch-up tick
+    // From then on: hourly.
+    await vi.advanceTimersByTimeAsync(RECALC_INTERVAL_MS - 1);
+    expect(calls).toHaveLength(2);
     fail = true;
     await vi.advanceTimersByTimeAsync(1);
-    expect(calls).toHaveLength(2); // 6 h tick, fails
+    expect(calls).toHaveLength(3); // hourly tick, fails
     await vi.advanceTimersByTimeAsync(RECALC_RETRY_MS);
-    expect(calls).toHaveLength(3); // retried after 5 min
+    expect(calls).toHaveLength(4); // retried after 5 min
     service.close();
     await vi.advanceTimersByTimeAsync(RECALC_INTERVAL_MS * 2);
-    expect(calls).toHaveLength(3); // closed: no more ticks
+    expect(calls).toHaveLength(4); // closed: no more ticks
   });
 
   it("exposes the interval constants", () => {
-    expect(RECALC_INTERVAL_MS).toBe(6 * 3600 * 1000);
+    expect(RECALC_INTERVAL_MS).toBe(3600 * 1000);
+    expect(RECALC_CATCHUP_MS).toBe(5 * 60 * 1000);
     expect(RECALC_RETRY_MS).toBe(5 * 60 * 1000);
+  });
+
+  it("is not ready for storage before the first successful scan", () => {
+    const service = createStatsService(async () => SCAN);
+    expect(() => service.storage()).toThrow(StatsNotReadyError);
+    service.close();
+  });
+
+  it("samples the storage byte sizes on each rebuild and serves them from memory with rowCount", async () => {
+    let sizes = { databaseBytes: 8_000_000, tableBytes: 105_600_000 };
+    const sizeCalls: number[] = [];
+    const service = createStatsService(async () => SCAN, {
+      now: () => NOW,
+      sizes: async () => {
+        sizeCalls.push(1);
+        return sizes;
+      },
+    });
+    await service.recalc();
+    expect(service.storage()).toEqual({ databaseBytes: 8_000_000, tableBytes: 105_600_000, rowCount: 103 });
+    sizes = { databaseBytes: 9_000_000, tableBytes: 110_000_000 };
+    service.onPersisted([{ ts: NOW, kind: 10 }]);
+    // Sizes are not re-queried per call: rowCount moved, the bytes did not.
+    expect(service.storage()).toEqual({ databaseBytes: 8_000_000, tableBytes: 105_600_000, rowCount: 104 });
+    expect(sizeCalls).toHaveLength(1);
+    await service.recalc();
+    expect(service.storage()).toEqual({ databaseBytes: 9_000_000, tableBytes: 110_000_000, rowCount: 103 });
+    expect(sizeCalls).toHaveLength(2);
+    service.close();
+  });
+
+  it("reports zero byte sizes when no sizes function is configured", async () => {
+    const service = createStatsService(async () => SCAN, { now: () => NOW });
+    await service.recalc();
+    expect(service.storage()).toEqual({ databaseBytes: 0, tableBytes: 0, rowCount: 103 });
+    service.close();
+  });
+
+  it("treats a failing sizes query as a failed rebuild: previous cache and sizes are kept", async () => {
+    const warn = vi.fn();
+    let fail = false;
+    const service = createStatsService(async () => SCAN, {
+      now: () => NOW,
+      warn,
+      sizes: async () => {
+        if (fail) throw new Error("pg_database_size failed at db-internal.example");
+        return { databaseBytes: 8_000_000, tableBytes: 105_600_000 };
+      },
+    });
+    await service.recalc();
+    fail = true;
+    service.onPersisted([{ ts: NOW, kind: 10 }]);
+    await service.recalc(); // must not reject
+    expect(service.storage()).toEqual({ databaseBytes: 8_000_000, tableBytes: 105_600_000, rowCount: 104 });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0][0])).toContain("stats recalc failed: pg_database_size failed at db-internal.example");
+    service.close();
   });
 });

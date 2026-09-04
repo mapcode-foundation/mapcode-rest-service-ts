@@ -18,7 +18,7 @@ import { STATS_WINDOWS, type StatsKindCounts } from "./stats-query.ts";
 // ---------------------------------------------------------------------------
 // StatsCache — per-kind all-time counter plus three CounterRings. Answers
 // every /mapcode/replay/stats window without touching the database. Rebuilt
-// from one scan (fromScan) every 6 hours; fed per persisted event in between.
+// from one scan (fromScan) every hour; fed per persisted event in between.
 // Correct only because the event log is append-only (see schema.ts).
 // ---------------------------------------------------------------------------
 
