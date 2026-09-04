@@ -56,6 +56,12 @@ export interface RecorderOptions {
   /** Minimum ms between warnings (default 60000). */
   warnIntervalMs?: number;
   warn?: (message: string) => void;
+  /**
+   * Called once per successful INSERT with exactly the stored rows — the hook
+   * the stats cache counts on. Never called for a dropped batch. A throwing
+   * callback is warned about and otherwise ignored.
+   */
+  onPersisted?: (batch: readonly RecordedRequest[]) => void;
 }
 
 const NOOP_RECORDER: RequestRecorder = {
@@ -106,6 +112,14 @@ export function createRequestRecorder(pool: RecorderPool | null, options: Record
         }
         const values = batch.flatMap((e) => [e.ts, e.lat, e.lon, e.kind, e.status, e.client, e.mapcode]);
         await pool.query(insertSql(batch.length), values);
+        if (options.onPersisted !== undefined) {
+          try {
+            options.onPersisted(batch);
+          } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            warnRateLimited(`request recorder: onPersisted failed: ${message}`);
+          }
+        }
       } catch (err) {
         // Drop the batch: decorative data — a retry storm during an outage is
         // worse than a gap. (A failed ensureSchema retries on the next flush.)

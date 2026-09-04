@@ -188,4 +188,36 @@ describe("createRequestRecorder", () => {
     await recorder.flush();
     expect(pool.inserts()).toHaveLength(1); // nothing new
   });
+
+  it("reports each successfully inserted batch to onPersisted, never a dropped one", async () => {
+    const pool = fakePool({ insert: 1 });
+    const persisted: RecordedRequest[][] = [];
+    const recorder = createRequestRecorder(pool, { warn: () => {}, onPersisted: (batch) => persisted.push([...batch]) });
+    recorder.record(event({ ts: 1000 }));
+    await recorder.flush(); // insert fails → dropped, no callback
+    expect(persisted).toEqual([]);
+    recorder.record(event({ ts: 2000 }));
+    recorder.record(event({ ts: 2001 }));
+    await recorder.flush();
+    expect(persisted).toEqual([[event({ ts: 2000 }), event({ ts: 2001 })]]);
+  });
+
+  it("keeps flushing when onPersisted throws (the batch is already stored)", async () => {
+    const pool = fakePool();
+    const warn = vi.fn();
+    const recorder = createRequestRecorder(pool, {
+      warn,
+      onPersisted: () => {
+        throw new Error("stats exploded");
+      },
+    });
+    recorder.record(event({ ts: 1000 }));
+    await recorder.flush();
+    recorder.record(event({ ts: 1001 }));
+    await recorder.flush();
+    expect(pool.inserts()).toHaveLength(2);
+    expect(warn).toHaveBeenCalledTimes(1); // rate-limited warning, not a "dropping" one
+    expect(String(warn.mock.calls[0][0])).toContain("onPersisted");
+    expect(String(warn.mock.calls[0][0])).not.toContain("dropping");
+  });
 });
