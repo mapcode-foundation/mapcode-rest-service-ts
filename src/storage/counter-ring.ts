@@ -41,8 +41,10 @@ export class CounterRing {
    * Add n events at ts. A newer bucket landing on a slot evicts the older
    * one (it has aged past the horizon); an older event than the slot holds is
    * beyond the horizon and ignored. Hence order-independent.
+   * ts is a non-negative epoch second (negative values are ignored); bucket ids must fit Int32 — true for int4 epoch seconds.
    */
   add(ts: number, n = 1): void {
+    if (ts < 0) return;
     const bucket = this.bucketOf(ts);
     const slot = bucket % this.slots;
     const held = this.ids[slot];

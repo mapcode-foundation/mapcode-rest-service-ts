@@ -65,4 +65,13 @@ describe("CounterRing", () => {
     expect(a.count(10, 10)).toBe(0); // 10 and 14 share a slot; 14 wins in both orders
     expect(b.count(10, 10)).toBe(0);
   });
+
+  it("ignores negative timestamps", () => {
+    const ring = new CounterRing(1, 4);
+    ring.add(-3);
+    ring.add(-1);
+    ring.add(2);
+    expect(ring.count(-3, 2)).toBe(1);
+    expect(ring.count(2, 2)).toBe(1);
+  });
 });
