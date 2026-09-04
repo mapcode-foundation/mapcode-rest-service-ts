@@ -13,11 +13,14 @@
 // limitations under the License.
 
 import type { RecorderPool } from "./schema.ts";
+import { TIERS, type StatsScanRow, type StatsTier } from "./stats-cache.ts";
 
 // ---------------------------------------------------------------------------
-// The stats SELECT: one pass over mapcode_request, one FILTERed count per
-// trailing window plus the unfiltered total. All rows count — non-geo rows
-// exist precisely for usage stats, so no lat IS NOT NULL here.
+// Stats SQL. The per-request path never touches the database: the stats
+// endpoint is served from StatsCache. This file holds the 6-hourly rebuild
+// scan (one statement, one snapshot) and the cheap size lookup.
+// The per-request `buildStatsQuery`/`queryStats`/`STORAGE_SQL`/`queryStorage`
+// remain until the wiring task removes them.
 // ---------------------------------------------------------------------------
 
 /** Trailing windows, newest first; keys are the JSON field names. */
@@ -104,4 +107,49 @@ export async function queryStats(pool: RecorderPool, nowEpochSeconds: number): P
     "1y": Number(row.c_1y),
     all: Number(row.c_all),
   }));
+}
+
+/**
+ * One statement → one MVCC snapshot across all four tiers. The `all` branch
+ * is the single full table scan; it runs every 6 hours, never per request.
+ * No kind filter: the cache needs kind-50 rows for the physical rowCount and
+ * drops them from totals itself.
+ */
+export function buildStatsScanQuery(nowEpochSeconds: number): { text: string; values: unknown[] } {
+  const text =
+    "SELECT 'all' AS tier, kind, NULL::int AS bucket, count(*) AS n FROM mapcode_request GROUP BY kind" +
+    " UNION ALL " +
+    "SELECT 'hour' AS tier, kind, (ts / 3600)::int AS bucket, count(*) AS n FROM mapcode_request WHERE ts >= $1 GROUP BY kind, ts / 3600" +
+    " UNION ALL " +
+    "SELECT 'min' AS tier, kind, (ts / 60)::int AS bucket, count(*) AS n FROM mapcode_request WHERE ts >= $2 GROUP BY kind, ts / 60" +
+    " UNION ALL " +
+    "SELECT 'sec' AS tier, kind, ts AS bucket, count(*) AS n FROM mapcode_request WHERE ts >= $3 GROUP BY kind, ts";
+  const values = [
+    nowEpochSeconds - TIERS.hour.widthSeconds * TIERS.hour.slots,
+    nowEpochSeconds - TIERS.min.widthSeconds * TIERS.min.slots,
+    nowEpochSeconds - TIERS.sec.widthSeconds * TIERS.sec.slots,
+  ];
+  return { text, values };
+}
+
+export async function scanStats(pool: RecorderPool, nowEpochSeconds: number): Promise<StatsScanRow[]> {
+  const { text, values } = buildStatsScanQuery(nowEpochSeconds);
+  // count(*) is int8 → string from pg; kind (int2) and bucket (int4) stay numbers.
+  const result = (await pool.query(text, values)) as {
+    rows: { tier: StatsTier; kind: number; bucket: number | null; n: string }[];
+  };
+  return result.rows.map((row) => ({ tier: row.tier, kind: row.kind, bucket: row.bucket, n: Number(row.n) }));
+}
+
+// Catalog/stat lookups, milliseconds each. rowCount comes from StatsCache;
+// the former exact count(*) was a second full table scan per call.
+export const SIZES_SQL =
+  "SELECT pg_database_size(current_database()) AS db_bytes," +
+  " pg_total_relation_size('mapcode_request') AS table_bytes";
+
+export async function querySizes(pool: RecorderPool): Promise<Pick<StorageInfo, "databaseBytes" | "tableBytes">> {
+  // int8 sizes come back from pg as strings.
+  const result = (await pool.query(SIZES_SQL)) as { rows: Record<string, string>[] };
+  const row = result.rows[0];
+  return { databaseBytes: Number(row.db_bytes), tableBytes: Number(row.table_bytes) };
 }
