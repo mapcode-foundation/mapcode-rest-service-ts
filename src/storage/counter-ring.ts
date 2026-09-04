@@ -21,14 +21,15 @@
 // ---------------------------------------------------------------------------
 
 export class CounterRing {
+  readonly widthSeconds: number;
+  readonly slots: number;
   private readonly counts: Uint32Array;
   /** Bucket id held by each slot; -1 = empty. */
   private readonly ids: Int32Array;
 
-  constructor(
-    readonly widthSeconds: number,
-    readonly slots: number
-  ) {
+  constructor(widthSeconds: number, slots: number) {
+    this.widthSeconds = widthSeconds;
+    this.slots = slots;
     this.counts = new Uint32Array(slots);
     this.ids = new Int32Array(slots).fill(-1);
   }
