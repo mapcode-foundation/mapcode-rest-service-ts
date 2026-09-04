@@ -96,12 +96,15 @@ export function createStatsService(
       schedule(retryMs);
     } finally {
       journal = null;
-      inFlight = null;
     }
   };
 
   const recalc = (): Promise<void> => {
-    if (inFlight === null) inFlight = run();
+    if (inFlight === null) {
+      inFlight = run().finally(() => {
+        inFlight = null;
+      });
+    }
     return inFlight;
   };
 

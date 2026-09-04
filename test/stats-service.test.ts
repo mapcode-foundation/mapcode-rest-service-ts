@@ -123,6 +123,24 @@ describe("createStatsService", () => {
     service.close();
   });
 
+  it("recovers when the scan function throws synchronously", async () => {
+    const calls: number[] = [];
+    const service = createStatsService(
+      (now) => {
+        calls.push(now);
+        if (calls.length === 1) throw new Error("sync boom");
+        return Promise.resolve(SCAN);
+      },
+      { now: () => NOW, warn: () => {} }
+    );
+    await service.recalc(); // must not reject
+    expect(() => service.rowCount()).toThrow(StatsNotReadyError);
+    await service.recalc();
+    expect(calls).toHaveLength(2);
+    expect(service.rowCount()).toBe(103);
+    service.close();
+  });
+
   it("schedules the next scan 6 h after success and 5 min after failure", async () => {
     vi.useFakeTimers();
     let fail = false;
