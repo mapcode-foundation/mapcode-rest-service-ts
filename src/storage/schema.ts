@@ -56,13 +56,32 @@ export async function ensureSchema(pool: RecorderPool): Promise<void> {
  * ordering). CONCURRENTLY keeps INSERTs flowing during the build on a large
  * table, and cannot run inside a transaction block — hence a separate
  * single-statement query, not part of SCHEMA_DDL. An interrupted concurrent
- * build leaves an INVALID index that IF NOT EXISTS then skips: operators
- * `DROP INDEX mapcode_request_ts_btree` and restart the service.
+ * build leaves an INVALID index that IF NOT EXISTS then skips: `ensureBtreeIndex`
+ * detects an INVALID leftover and rebuilds it.
  */
 export const BTREE_INDEX_DDL =
   "CREATE INDEX CONCURRENTLY IF NOT EXISTS mapcode_request_ts_btree ON mapcode_request (ts)";
 
-/** Idempotent btree bootstrap; call after ensureSchema, on the maintenance pool. */
-export async function ensureBtreeIndex(pool: RecorderPool): Promise<void> {
+/** Validity of the ts btree, if it exists: an interrupted CONCURRENTLY build leaves it INVALID. */
+export const BTREE_INDEX_VALIDITY_SQL =
+  "SELECT i.indisvalid AS valid FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid" +
+  " WHERE c.relname = 'mapcode_request_ts_btree'";
+
+/** CONCURRENTLY so dropping the dead index never blocks the recorder's INSERTs. */
+export const BTREE_INDEX_DROP_DDL = "DROP INDEX CONCURRENTLY IF EXISTS mapcode_request_ts_btree";
+
+/**
+ * Idempotent btree bootstrap; call after ensureSchema, on the maintenance pool.
+ * An INVALID leftover from an interrupted build is dropped and rebuilt, with a warning.
+ */
+export async function ensureBtreeIndex(
+  pool: RecorderPool,
+  warn: (message: string) => void = (message) => console.warn(message)
+): Promise<void> {
+  const result = (await pool.query(BTREE_INDEX_VALIDITY_SQL)) as { rows: { valid: boolean }[] };
+  if (result.rows.length > 0 && result.rows[0].valid === false) {
+    warn("btree index mapcode_request_ts_btree is INVALID (interrupted build); dropping and rebuilding");
+    await pool.query(BTREE_INDEX_DROP_DDL);
+  }
   await pool.query(BTREE_INDEX_DDL);
 }

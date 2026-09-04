@@ -25,12 +25,20 @@ describe("poolConfig", () => {
     expect(cfg).toEqual({
       connectionString: "postgres://u:p@h:5432/db?sslmode=require",
       statement_timeout: 30_000,
+      query_timeout: 35_000,
+      connectionTimeoutMillis: 10_000,
     });
   });
 
   it("applies maintenance tuning: one connection, one-hour statement timeout", () => {
     const cfg = poolConfig({ dbUrl: "postgres://u:p@h:5432/db", dbCaCert: null }, MAINTENANCE_POOL_TUNING);
-    expect(cfg).toEqual({ connectionString: "postgres://u:p@h:5432/db", statement_timeout: 3_600_000, max: 1 });
+    expect(cfg).toEqual({
+      connectionString: "postgres://u:p@h:5432/db",
+      statement_timeout: 3_600_000,
+      query_timeout: 3_605_000,
+      connectionTimeoutMillis: 10_000,
+      max: 1,
+    });
   });
 
   it("exposes the tuning constants", () => {

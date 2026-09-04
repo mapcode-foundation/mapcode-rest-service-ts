@@ -79,9 +79,11 @@ export function createStatsService(
 
   const run = async (): Promise<void> => {
     // Open the journal before the query is sent: events persisted while the
-    // scan runs are replayed onto the fresh cache. (An event committed just
-    // before the snapshot whose callback lands just after this line is double
-    // counted; the next recalc corrects it.)
+    // scan runs are replayed onto the fresh cache. The race window spans
+    // opening the journal to the scan's snapshot — typically tens to a few
+    // hundred milliseconds when the idle maintenance pool must first open a
+    // fresh connection. Any batch persisted inside it is counted twice until
+    // the next rebuild corrects it.
     const pending: StatsEvent[] = [];
     journal = pending;
     try {

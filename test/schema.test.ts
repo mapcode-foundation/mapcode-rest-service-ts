@@ -12,8 +12,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { describe, it, expect } from "vitest";
-import { SCHEMA_DDL, BTREE_INDEX_DDL, ensureSchema, ensureBtreeIndex } from "../src/storage/schema.ts";
+import { describe, it, expect, vi } from "vitest";
+import {
+  SCHEMA_DDL,
+  BTREE_INDEX_DDL,
+  BTREE_INDEX_VALIDITY_SQL,
+  BTREE_INDEX_DROP_DDL,
+  ensureSchema,
+  ensureBtreeIndex,
+} from "../src/storage/schema.ts";
+
+/** Fake pool: answers the validity query with `validityRows`, everything else with no rows. */
+function fakePool(validityRows: { valid: boolean }[], calls: string[]) {
+  return {
+    query: async (text: string) => {
+      calls.push(text);
+      if (text === BTREE_INDEX_VALIDITY_SQL) return { rows: validityRows };
+      return { rows: [] };
+    },
+  };
+}
 
 describe("schema DDL", () => {
   it("keeps the table + BRIN bootstrap transactional and separate from the btree build", () => {
@@ -30,9 +48,28 @@ describe("schema DDL", () => {
 
   it("ensureBtreeIndex issues exactly the single-statement DDL", async () => {
     const calls: string[] = [];
-    const pool = { query: async (text: string) => { calls.push(text); return { rows: [] }; } };
+    const pool = fakePool([], calls);
     await ensureSchema(pool);
     await ensureBtreeIndex(pool);
-    expect(calls).toEqual([SCHEMA_DDL, BTREE_INDEX_DDL]);
+    expect(calls).toEqual([SCHEMA_DDL, BTREE_INDEX_VALIDITY_SQL, BTREE_INDEX_DDL]);
+  });
+
+  it("keeps a valid btree and does not drop it", async () => {
+    const calls: string[] = [];
+    const pool = fakePool([{ valid: true }], calls);
+    const warn = vi.fn();
+    await ensureBtreeIndex(pool, warn);
+    expect(calls).toEqual([BTREE_INDEX_VALIDITY_SQL, BTREE_INDEX_DDL]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("drops and rebuilds an INVALID btree with a warning", async () => {
+    const calls: string[] = [];
+    const pool = fakePool([{ valid: false }], calls);
+    const warn = vi.fn();
+    await ensureBtreeIndex(pool, warn);
+    expect(calls).toEqual([BTREE_INDEX_VALIDITY_SQL, BTREE_INDEX_DROP_DDL, BTREE_INDEX_DDL]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain("INVALID");
   });
 });

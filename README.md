@@ -220,13 +220,16 @@ windows are never shorter than advertised and at most one bucket longer.
 The event table is append-only: it is never trimmed. Operations notes:
 
 - API queries run with `statement_timeout = 30s`; the maintenance connection
-  (stats scan, index build) with `1h`.
+  (stats scan, index build) with `1h`. Connections also carry a 10-second
+  connect timeout and a client-side query timeout 5 seconds above the server
+  statement timeout.
 - A btree on `ts` (`mapcode_request_ts_btree`) is built `CONCURRENTLY` at
-  startup. If a build was interrupted, Postgres leaves it `INVALID` and the
-  next start skips it: `DROP INDEX mapcode_request_ts_btree;` and restart.
-- The maintenance connection is a single-connection pool, so on a large
-  table the stats endpoint stays `503` until the initial btree build
-  finishes and the first scan completes.
+  startup. If a build was interrupted, Postgres leaves it `INVALID`; this is
+  detected at the next start, logged, and rebuilt automatically.
+- The maintenance connection is a single-connection pool, so at startup the
+  schema statement, the warm-up scan and the btree build run one after
+  another in that order. The stats endpoint answers `503` until the scan
+  completes; the index build (which does not block the API) follows it.
 
 `avgPerHour` is `totals[w] / hours(w)` rounded to one decimal, for the windows
 from 1d up (shorter windows are too bursty to average; `all` has an unknown

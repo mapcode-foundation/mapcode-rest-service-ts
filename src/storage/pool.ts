@@ -17,7 +17,11 @@ import type { Config } from "../config.ts";
 
 /** Per-pool knobs. statement_timeout is per connection in pg, hence per pool. */
 export interface PoolTuning {
-  /** Server-side statement_timeout in ms; a runaway query is cancelled by Postgres. */
+  /**
+   * Server-side statement_timeout in ms; a runaway query is cancelled by Postgres.
+   * A client-side query_timeout is also set, 5 s above this, as a belt-and-braces
+   * bound for a half-open connection that never hears back from the server.
+   */
   statementTimeoutMs: number;
   /** Pool size cap (pg default 10 when omitted). */
   max?: number;
@@ -39,7 +43,12 @@ export function poolConfig(
   tuning: PoolTuning = API_POOL_TUNING
 ): PoolConfig | null {
   if (config.dbUrl === null) return null;
-  const options: PoolConfig = { connectionString: config.dbUrl, statement_timeout: tuning.statementTimeoutMs };
+  const options: PoolConfig = {
+    connectionString: config.dbUrl,
+    statement_timeout: tuning.statementTimeoutMs,
+    query_timeout: tuning.statementTimeoutMs + 5_000,
+    connectionTimeoutMillis: 10_000,
+  };
   if (tuning.max !== undefined) options.max = tuning.max;
   if (config.dbCaCert !== null) {
     options.ssl = { ca: config.dbCaCert, rejectUnauthorized: true };
