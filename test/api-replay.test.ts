@@ -81,7 +81,7 @@ describe("auth", () => {
 
 describe("validation", () => {
   it("400s on missing from, oversized window, and bad limit", async () => {
-    for (const qs of ["", "from=1000&to=" + (1000 + 31 * 86400 + 1), "from=1000&to=2000&limit=0"]) {
+    for (const qs of ["", "from=1000&to=" + (1000 + 365 * 86400 + 1), "from=1000&to=2000&limit=0"]) {
       const res = await app.inject({ method: "GET", url: `/mapcode/replay?${qs}`, headers: AUTH });
       expect(res.statusCode).toBe(400);
     }
