@@ -15,6 +15,10 @@
 // ---------------------------------------------------------------------------
 // Postgres schema for recorded requests. src/storage/ is the only layer that
 // talks to the database; domain/ and resources/ stay DB-free.
+//
+// The event log is APPEND-ONLY by decision (2026-09-04): no retention job,
+// no DELETE, no TRUNCATE. The in-memory stats cache (stats-cache.ts) relies
+// on rows never disappearing.
 // ---------------------------------------------------------------------------
 
 /**
@@ -45,4 +49,20 @@ CREATE INDEX IF NOT EXISTS mapcode_request_ts_brin
 /** Idempotent schema bootstrap (CREATE ... IF NOT EXISTS). */
 export async function ensureSchema(pool: RecorderPool): Promise<void> {
   await pool.query(SCHEMA_DDL);
+}
+
+/**
+ * The btree lets `ORDER BY ts LIMIT n` stop after n rows (BRIN cannot supply
+ * ordering). CONCURRENTLY keeps INSERTs flowing during the build on a large
+ * table, and cannot run inside a transaction block — hence a separate
+ * single-statement query, not part of SCHEMA_DDL. An interrupted concurrent
+ * build leaves an INVALID index that IF NOT EXISTS then skips: operators
+ * `DROP INDEX mapcode_request_ts_btree` and restart the service.
+ */
+export const BTREE_INDEX_DDL =
+  "CREATE INDEX CONCURRENTLY IF NOT EXISTS mapcode_request_ts_btree ON mapcode_request (ts)";
+
+/** Idempotent btree bootstrap; call after ensureSchema, on the maintenance pool. */
+export async function ensureBtreeIndex(pool: RecorderPool): Promise<void> {
+  await pool.query(BTREE_INDEX_DDL);
 }

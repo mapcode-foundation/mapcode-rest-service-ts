@@ -19,7 +19,7 @@
 //   docker stop mapcode-test-pg
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Pool } from "pg";
-import { ensureSchema } from "../src/storage/schema.ts";
+import { ensureSchema, ensureBtreeIndex } from "../src/storage/schema.ts";
 import { createRequestRecorder } from "../src/storage/request-recorder.ts";
 import { queryReplay } from "../src/storage/replay-query.ts";
 import { queryStats, queryStorage } from "../src/storage/stats-query.ts";
@@ -91,14 +91,15 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
     expect(info.databaseBytes).toBeGreaterThan(info.tableBytes);
   });
 
-  it("uses the BRIN index for the range scan", async () => {
+  it("uses the ts btree for the ordered range scan", async () => {
+    await ensureBtreeIndex(pool);
     const client = await pool.connect();
     try {
       await client.query("SET enable_seqscan = off");
       const res = await client.query(
         "EXPLAIN (FORMAT JSON) SELECT ts FROM mapcode_request WHERE ts >= 1000 AND ts < 2000 AND lat IS NOT NULL ORDER BY ts LIMIT 10"
       );
-      expect(JSON.stringify(res.rows[0])).toContain("mapcode_request_ts_brin");
+      expect(JSON.stringify(res.rows[0])).toContain("mapcode_request_ts_btree");
     } finally {
       await client.query("RESET enable_seqscan");
       client.release();
