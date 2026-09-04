@@ -13,6 +13,7 @@
 // limitations under the License.
 
 import { ApiError } from "../errors.ts";
+import { StatsNotReadyError } from "../storage/stats-service.ts";
 import { STATS_WINDOWS, type StatsCounts, type StatsQueryFn, type StorageQueryFn } from "../storage/stats-query.ts";
 import { KIND } from "../routes/recording.ts";
 
@@ -47,7 +48,9 @@ export async function handleReplayStats(
   let storageInfo;
   try {
     [rows, storageInfo] = await Promise.all([query(nowEpochSeconds), storageQuery()]);
-  } catch {
+  } catch (err) {
+    // Until the first rebuild scan completes there are no truthful numbers.
+    if (err instanceof StatsNotReadyError) throw new ApiError(503, "Service Unavailable");
     // Never let raw pg error text (hostnames, usernames, ...) reach the response body.
     throw new ApiError(500, "Internal Server Error");
   }

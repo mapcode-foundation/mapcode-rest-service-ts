@@ -15,6 +15,7 @@
 import { describe, it, expect } from "vitest";
 import { handleReplayStats, STATS_CACHE_SECONDS } from "../src/resources/replay-stats.ts";
 import { ApiError } from "../src/errors.ts";
+import { StatsNotReadyError } from "../src/storage/stats-service.ts";
 import type { StatsKindCounts, StorageInfo } from "../src/storage/stats-query.ts";
 
 const NOW = 1_737_100_000;
@@ -102,5 +103,17 @@ describe("handleReplayStats", () => {
         (err: unknown) => err instanceof ApiError && err.httpStatus === 500 && !err.message.includes("db-internal")
       );
     }
+  });
+
+  it("answers 503 while the stats cache is warming up", async () => {
+    const notReady = async (): Promise<never> => {
+      throw new StatsNotReadyError();
+    };
+    await expect(handleReplayStats(NOW, notReady, storageQuery)).rejects.toSatisfy(
+      (err: unknown) => err instanceof ApiError && err.httpStatus === 503
+    );
+    await expect(handleReplayStats(NOW, async () => ROWS, notReady)).rejects.toSatisfy(
+      (err: unknown) => err instanceof ApiError && err.httpStatus === 503
+    );
   });
 });

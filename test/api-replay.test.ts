@@ -18,6 +18,7 @@ import type { FastifyInstance } from "fastify";
 import { buildServer } from "../src/server.ts";
 import { createMapcodeService } from "../src/domain/mapcode-service.ts";
 import { BoundaryService } from "../src/domain/boundary-service.ts";
+import { StatsNotReadyError } from "../src/storage/stats-service.ts";
 import type { ReplayColumns, ReplayQueryArgs } from "../src/storage/replay-query.ts";
 import type { StatsKindCounts, StorageInfo } from "../src/storage/stats-query.ts";
 
@@ -31,7 +32,7 @@ let app: FastifyInstance;
 let queryCalls: ReplayQueryArgs[];
 let queryResult: ReplayColumns;
 let statsCalls: number[];
-let statsResult: StatsKindCounts[];
+let statsResult: StatsKindCounts[] | null;
 
 beforeAll(async () => {
   const mapcodeService = createMapcodeService();
@@ -48,6 +49,7 @@ beforeAll(async () => {
       },
       stats: async (now) => {
         statsCalls.push(now);
+        if (statsResult === null) throw new StatsNotReadyError();
         return statsResult;
       },
       storage: async () => STORAGE,
@@ -189,6 +191,13 @@ describe("stats", () => {
     });
     expect(Math.abs(body.now - before)).toBeLessThanOrEqual(2);
     expect(statsCalls).toEqual([body.now]);
+  });
+
+  it("503s while the cache is warming up", async () => {
+    statsResult = null;
+    const res = await app.inject({ method: "GET", url: "/mapcode/replay/stats", headers: AUTH });
+    expect(res.statusCode).toBe(503);
+    expect(JSON.parse(res.body)).toMatchObject({ status: 503 });
   });
 
   it("answers OPTIONS /mapcode/replay/stats with 204 and CORS headers", async () => {
