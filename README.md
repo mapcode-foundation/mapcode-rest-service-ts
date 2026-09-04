@@ -208,6 +208,23 @@ not recorded, and historical replay rows are excluded from the counts:
 }
 ```
 
+Stats are served from an in-memory cache, not from a query: every recorded
+event increments per-kind time buckets, and the cache is rebuilt from one
+full scan at startup and every 6 hours (retried after 5 minutes on failure).
+Until the first scan completes the endpoint answers `503`. `1m`, `1h` and
+`all` are exact; `1d` starts at the minute boundary at or before `now - 1d`,
+and `7d`, `31d`, `1y` at the hour boundary at or before their start — so those
+windows are never shorter than advertised and at most one bucket longer.
+`storage.rowCount` comes from the same cache; the byte sizes are live.
+
+The event table is append-only: it is never trimmed. Operations notes:
+
+- API queries run with `statement_timeout = 30s`; the maintenance connection
+  (stats scan, index build) with `1h`.
+- A btree on `ts` (`mapcode_request_ts_btree`) is built `CONCURRENTLY` at
+  startup. If a build was interrupted, Postgres leaves it `INVALID` and the
+  next start skips it: `DROP INDEX mapcode_request_ts_btree;` and restart.
+
 `avgPerHour` is `totals[w] / hours(w)` rounded to one decimal, for the windows
 from 1d up (shorter windows are too bursty to average; `all` has an unknown
 span). `byKind` breaks the same window counts down per endpoint kind (the

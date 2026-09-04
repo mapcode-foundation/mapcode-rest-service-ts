@@ -15,10 +15,12 @@
 import { loadConfig, loadEnvFileIfExists } from "./config.ts";
 import { BoundaryService } from "./domain/boundary-service.ts";
 import { createMapcodeService } from "./domain/mapcode-service.ts";
-import { createPool } from "./storage/pool.ts";
+import { createPool, MAINTENANCE_POOL_TUNING } from "./storage/pool.ts";
 import { createRequestRecorder } from "./storage/request-recorder.ts";
 import { queryReplay } from "./storage/replay-query.ts";
-import { queryStats, queryStorage } from "./storage/stats-query.ts";
+import { scanStats, querySizes } from "./storage/stats-query.ts";
+import { createStatsService } from "./storage/stats-service.ts";
+import { ensureSchema, ensureBtreeIndex } from "./storage/schema.ts";
 import { buildServer } from "./server.ts";
 
 async function main(): Promise<void> {
@@ -28,8 +30,14 @@ async function main(): Promise<void> {
   const mapcodeService = createMapcodeService();
 
   // config.dbUrl contains a password — it must never be logged.
+  // Two pools: API-path queries (30 s statement_timeout) and one maintenance
+  // connection (1 h) for the 6-hourly stats scan and the one-off btree build.
   const pool = createPool(config);
-  const recorder = createRequestRecorder(pool);
+  const maintenancePool = createPool(config, MAINTENANCE_POOL_TUNING);
+  const statsService = createStatsService((now) => scanStats(maintenancePool!, now));
+  const recorder = createRequestRecorder(pool, {
+    onPersisted: (batch) => statsService.onPersisted(batch),
+  });
   const app = buildServer({
     mapcodeService,
     boundaryService,
@@ -44,11 +52,26 @@ async function main(): Promise<void> {
         ? {
             token: config.replayToken,
             query: (args) => queryReplay(pool, args),
-            stats: (now) => queryStats(pool, now),
-            storage: () => queryStorage(pool),
+            stats: async (now) => statsService.rows(now),
+            storage: async () => ({ ...(await querySizes(pool)), rowCount: statsService.rowCount() }),
           }
         : undefined,
   });
+
+  if (maintenancePool !== null) {
+    // Schema first (fast, transactional), then the concurrent btree build and
+    // the warm-up scan — neither awaited: the API must not wait on a
+    // potentially long index build or full-table scan. Message-only logging.
+    void (async () => {
+      try {
+        await ensureSchema(maintenancePool);
+        await ensureBtreeIndex(maintenancePool);
+      } catch (err) {
+        console.warn(`btree index bootstrap failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    })();
+    void statsService.recalc();
+  }
 
   // A normal deploy stops the service with a signal: drain the recorder so
   // no recorded events are lost. (recorder.close() flushes before resolving.)
@@ -69,6 +92,11 @@ async function main(): Promise<void> {
       };
       await step("app.close", () => app.close());
       await step("recorder drain", () => recorder.close());
+      statsService.close();
+      // Not awaited: pool.end() waits for checked-out clients, and a scan in
+      // flight may hold the maintenance connection for minutes. The scan is
+      // idempotent and re-runs at the next start.
+      void maintenancePool?.end();
       await step("pool.end", async () => pool?.end());
       process.exit(failed ? 1 : 0);
     })();

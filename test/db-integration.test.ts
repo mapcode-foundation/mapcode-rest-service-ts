@@ -22,7 +22,8 @@ import { Pool } from "pg";
 import { ensureSchema, ensureBtreeIndex } from "../src/storage/schema.ts";
 import { createRequestRecorder } from "../src/storage/request-recorder.ts";
 import { queryReplay } from "../src/storage/replay-query.ts";
-import { queryStats, queryStorage } from "../src/storage/stats-query.ts";
+import { scanStats, querySizes } from "../src/storage/stats-query.ts";
+import { StatsCache } from "../src/storage/stats-cache.ts";
 
 const dbUrl = process.env.TEST_DB_URL;
 
@@ -66,7 +67,7 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
     expect(cols.kind).toEqual([20]);
   });
 
-  it("counts events per stats window, non-geo rows included, replay rows excluded", async () => {
+  it("rebuilds the stats cache from the tiered scan, non-geo rows included, replay rows in rowCount only", async () => {
     const now = Math.floor(Date.now() / 1000);
     const recorder = createRequestRecorder(pool);
     recorder.record({ ts: now, kind: 10, lat: null, lon: null, status: 20, client: 0, mapcode: null });
@@ -74,21 +75,22 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
     recorder.record({ ts: now, kind: 50, lat: null, lon: null, status: 20, client: 0, mapcode: null }); // historical replay row
     await recorder.close();
 
-    const rows = await queryStats(pool, now);
-    const total = (key: "1m" | "1h" | "1d" | "all") => rows.reduce((sum, r) => sum + r[key], 0);
+    const snap = StatsCache.fromScan(await scanStats(pool, now)).snapshot(now);
+    const total = (key: "1m" | "1h" | "1d" | "all") => snap.rows.reduce((sum, r) => sum + r[key], 0);
     expect(total("1m")).toBe(1);
     expect(total("1h")).toBe(1);
     expect(total("1d")).toBe(2);
     expect(total("all")).toBe(5); // 3 rows from the replay round-trip test + these 2; the kind-50 row is excluded
-    expect(rows.find((r) => r.kind === 10)?.all).toBe(3); // ts=1000 round-trip row + these 2
-    expect(rows.some((r) => r.kind === 50)).toBe(false);
+    expect(snap.rows.find((r) => r.kind === 10)?.all).toBe(3); // ts=1000 round-trip row + these 2
+    expect(snap.rows.some((r) => r.kind === 50)).toBe(false);
+    expect(snap.rowCount).toBe(6); // all rows, the kind-50 one included
   });
 
-  it("measures storage sizes and the exact row count", async () => {
-    const info = await queryStorage(pool);
-    expect(info.rowCount).toBe(6); // all rows, the kind-50 one included
+  it("measures storage sizes without a row count", async () => {
+    const info = await querySizes(pool);
     expect(info.tableBytes).toBeGreaterThan(0);
     expect(info.databaseBytes).toBeGreaterThan(info.tableBytes);
+    expect(info).not.toHaveProperty("rowCount");
   });
 
   it("uses the ts btree for the ordered range scan", async () => {
