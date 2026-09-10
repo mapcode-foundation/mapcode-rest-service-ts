@@ -63,11 +63,19 @@ export function condenseStatus(code: number): number {
   return Math.trunc(code / 100) * 10 + (code % 10);
 }
 
-/** Map the `client` query param to its 1-byte code. The raw string is never stored. */
+/**
+ * Map the `client` query param to its 1-byte code. The raw string is never stored.
+ *
+ * `web` (1) is deprecated and superseded by `demo` (5). Externally the tag turned
+ * out to be sent by callers making straight API calls rather than by the web
+ * front-end it was meant for, so code 1 is better read as generic API use than as
+ * web traffic. It stays accepted for now — old callers keep working and recorded
+ * rows keep their meaning — but front-ends should send `demo` instead.
+ */
 export function clientToCode(client: string | undefined): number {
   if (client === undefined || client === "") return 0;
   switch (client.toLowerCase()) {
-    case "web":
+    case "web": // deprecated; superseded by "demo" — read code 1 as API use
       return 1;
     case "android":
       return 2;

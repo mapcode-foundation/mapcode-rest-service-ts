@@ -145,7 +145,9 @@ recording (see below) when `MAPCODE_DB_URL` is set: `client` is classified into
 a one-byte caller class — `web`, `android`, `ios`, `demo`, anything else
 `other` (case-insensitive; the raw string is never stored) — and
 `allowLog=false|0|no` opts the request out of recording entirely. Without a
-database configured both are accepted and ignored.
+database configured both are accepted and ignored. `web` is **deprecated** in
+favour of `demo`: it is still accepted, but in practice it is sent by straight
+API callers rather than by a front-end, so treat that class as API use.
 
 The running service logs incoming requests at info level and handled warnings or
 errors at their corresponding levels.
