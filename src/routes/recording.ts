@@ -73,6 +73,8 @@ export function clientToCode(client: string | undefined): number {
       return 2;
     case "ios":
       return 3;
+    case "demo":
+      return 5;
     default:
       return 4;
   }

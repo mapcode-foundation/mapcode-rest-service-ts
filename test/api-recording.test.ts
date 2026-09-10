@@ -195,6 +195,7 @@ describe("client mapping", () => {
     expect((await inject("/mapcode/territories?client=web")).client).toBe(1);
     expect((await inject("/mapcode/territories?client=Android")).client).toBe(2);
     expect((await inject("/mapcode/territories?client=ios")).client).toBe(3);
+    expect((await inject("/mapcode/territories?client=demo")).client).toBe(5);
     expect((await inject("/mapcode/territories?client=curl")).client).toBe(4);
     expect((await inject("/mapcode/territories")).client).toBe(0);
   });

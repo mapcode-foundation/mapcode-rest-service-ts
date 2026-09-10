@@ -44,6 +44,7 @@ describe("clientToCode", () => {
     expect(clientToCode("WEB")).toBe(1);
     expect(clientToCode("Android")).toBe(2);
     expect(clientToCode("ios")).toBe(3);
+    expect(clientToCode("Demo")).toBe(5);
   });
   it("maps absent/empty to 0 and unknown to 4", () => {
     expect(clientToCode(undefined)).toBe(0);

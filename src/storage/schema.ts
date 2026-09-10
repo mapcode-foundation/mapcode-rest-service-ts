@@ -40,7 +40,7 @@ export const SCHEMA_DDL = `CREATE TABLE IF NOT EXISTS mapcode_request (
   lon     integer,             -- microdegrees, wrapped [-180e6, 180e6]
   kind    smallint NOT NULL,   -- endpoint identity (see src/routes/recording.ts)
   status  "char"   NOT NULL,   -- HTTP status, 1st+3rd digit
-  client  "char"   NOT NULL,   -- caller class (0 none, 1 web, 2 android, 3 ios, 4 other)
+  client  "char"   NOT NULL,   -- caller class (0 none, 1 web, 2 android, 3 ios, 4 other, 5 demo)
   mapcode text                 -- caller-provided mapcode; decode calls only
 );
 CREATE INDEX IF NOT EXISTS mapcode_request_ts_brin
