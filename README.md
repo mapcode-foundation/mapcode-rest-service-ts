@@ -140,7 +140,13 @@ prefixes force XML / JSON regardless of the `Accept` header.
   `count` (default 1000; **negative → 400**), `client`, `allowLog`.
 - `/territories/{territory}`: `context` (disambiguation), `client`, `allowLog`.
 
-`client` and `allowLog` are accepted and ignored (kept for API compatibility).
+`client` and `allowLog` never change a response, but they do feed request
+recording (see below) when `MAPCODE_DB_URL` is set: `client` is classified into
+a one-byte caller class — `web`, `android`, `ios`, `demo`, anything else
+`other` (case-insensitive; the raw string is never stored) — and
+`allowLog=false|0|no` opts the request out of recording entirely. Without a
+database configured both are accepted and ignored.
+
 The running service logs incoming requests at info level and handled warnings or
 errors at their corresponding levels.
 
