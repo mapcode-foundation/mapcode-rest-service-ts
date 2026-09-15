@@ -19,6 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyReply, FastifyRequest } from "fastify";
+import type { BoundaryService, TerritoryMatch } from "../domain/boundary-service.ts";
 import type { RequestRecorder } from "../storage/request-recorder.ts";
 
 /** Endpoint identity codes (smallint in the database, gapped for growth). */
@@ -88,11 +89,24 @@ export function clientToCode(client: string | undefined): number {
   }
 }
 
-/** True when allowLog opts the request out of recording (false/0/no, case-insensitive). */
+/**
+ * True when allowLog opts the request out of full recording (false/0/no,
+ * case-insensitive). Such a call is still counted, anonymised: kind, status,
+ * client and the country of the point — never the point itself or the mapcode.
+ */
 export function allowLogDenies(allowLog: string | undefined): boolean {
   if (allowLog === undefined) return false;
   const value = allowLog.toLowerCase();
   return value === "false" || value === "0" || value === "no";
+}
+
+/**
+ * The country of a boundary lookup: the top-ranked match, lifted to its parent
+ * when it is a subdivision (USA-CA → USA). null when nothing matched (open sea).
+ */
+export function countryFromMatches(matches: readonly TerritoryMatch[]): string | null {
+  if (matches.length === 0) return null;
+  return matches[0].parentAlphaCode ?? matches[0].alphaCode;
 }
 
 /** Latitude degrees → microdegrees, rounded and clamped to ±90e6. */
@@ -173,32 +187,45 @@ export function rawQueryValue(query: unknown, name: string): string | undefined 
  * Runs off the response path (onResponse fires after the bytes went out) and
  * must never throw — recording failures must never surface to callers.
  */
-export function createRecordingHook(recorder: RequestRecorder) {
+export function createRecordingHook(recorder: RequestRecorder, boundaryService: BoundaryService) {
   return function recordRequest(request: FastifyRequest, reply: FastifyReply, done: () => void): void {
     try {
       // Only successful calls to real API endpoints are usage: CORS preflights
       // and the replay family are transport/meta noise, invalid calls (4xx —
       // bad params, unknown routes, bad methods) and 5xx are not usage, and
       // status/version are monitoring noise.
-      if (
-        request.method.toUpperCase() !== "OPTIONS" &&
-        reply.statusCode < 400 &&
-        !isReplayFamilyUrl(request.url) &&
-        !allowLogDenies(rawQueryValue(request.query, "allowLog"))
-      ) {
+      if (request.method.toUpperCase() !== "OPTIONS" && reply.statusCode < 400 && !isReplayFamilyUrl(request.url)) {
         const stash = request.recording;
         const typeParam = (request.params as Record<string, string> | null)?.["type"];
         const kind = stash?.kind ?? kindFromRoute(request.routeOptions?.url, typeParam);
         if (kind !== KIND.status && kind !== KIND.version) {
-          recorder.record({
+          const hasPoint = stash?.latDeg !== undefined && stash?.lonDeg !== undefined;
+          const common = {
             ts: Math.floor(Date.now() / 1000),
             kind,
-            lat: stash?.latDeg !== undefined ? latToMicro(stash.latDeg) : null,
-            lon: stash?.lonDeg !== undefined ? lonToMicro(stash.lonDeg) : null,
             status: condenseStatus(reply.statusCode),
             client: clientToCode(rawQueryValue(request.query, "client")),
-            mapcode: stash?.mapcode ?? null,
-          });
+          };
+          if (allowLogDenies(rawQueryValue(request.query, "allowLog"))) {
+            // Opted out: keep the call countable by kind and country only. The
+            // point and the mapcode are reduced to the country and discarded.
+            recorder.record({
+              ...common,
+              lat: null,
+              lon: null,
+              mapcode: null,
+              country: hasPoint ? countryFromMatches(boundaryService.lookup(stash.latDeg!, stash.lonDeg!)) : null,
+            });
+          } else {
+            // Full row; country stays NULL — it is derivable from lat/lon.
+            recorder.record({
+              ...common,
+              lat: hasPoint ? latToMicro(stash.latDeg!) : null,
+              lon: hasPoint ? lonToMicro(stash.lonDeg!) : null,
+              mapcode: stash?.mapcode ?? null,
+              country: null,
+            });
+          }
         }
       }
     } catch {

@@ -48,9 +48,9 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
 
   it("round-trips recorder inserts into the replay query", async () => {
     const recorder = createRequestRecorder(pool);
-    recorder.record({ ts: 1000, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 1, mapcode: null });
-    recorder.record({ ts: 1001, kind: 20, lat: 48858370, lon: 2294481, status: 20, client: 0, mapcode: "NLD 49.4V" });
-    recorder.record({ ts: 1002, kind: 1, lat: null, lon: null, status: 20, client: 0, mapcode: null }); // non-geo
+    recorder.record({ ts: 1000, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 1, mapcode: null, country: null });
+    recorder.record({ ts: 1001, kind: 20, lat: 48858370, lon: 2294481, status: 20, client: 0, mapcode: "NLD 49.4V", country: null });
+    recorder.record({ ts: 1002, kind: 1, lat: null, lon: null, status: 20, client: 0, mapcode: null, country: null }); // non-geo
     await recorder.close();
 
     const cols = await queryReplay(pool, { from: 1000, to: 2000, limit: 10, kinds: null });
@@ -62,6 +62,19 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
     expect(cols.mapcode).toEqual([null, "NLD 49.4V"]);
   });
 
+  it("stores anonymised rows with a country and keeps them out of the replay map", async () => {
+    const recorder = createRequestRecorder(pool);
+    recorder.record({ ts: 1003, kind: 10, lat: null, lon: null, status: 20, client: 5, mapcode: null, country: "NLD" });
+    await recorder.close();
+
+    const res = await pool.query("SELECT kind, client::int AS client, country FROM mapcode_request WHERE ts = 1003");
+    expect(res.rows).toEqual([{ kind: 10, client: 5, country: "NLD" }]);
+    const geo = await pool.query("SELECT count(*)::int AS n FROM mapcode_request WHERE country IS NULL");
+    expect(geo.rows[0].n).toBe(3);
+    const cols = await queryReplay(pool, { from: 1000, to: 2000, limit: 10, kinds: null });
+    expect(cols.ts).toEqual([1000, 1001]);
+  });
+
   it("filters by kind", async () => {
     const cols = await queryReplay(pool, { from: 1000, to: 2000, limit: 10, kinds: [20] });
     expect(cols.kind).toEqual([20]);
@@ -70,9 +83,9 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
   it("rebuilds the stats cache from the tiered scan, non-geo rows included, replay rows in rowCount only", async () => {
     const now = Math.floor(Date.now() / 1000);
     const recorder = createRequestRecorder(pool);
-    recorder.record({ ts: now, kind: 10, lat: null, lon: null, status: 20, client: 0, mapcode: null });
-    recorder.record({ ts: now - 7200, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 1, mapcode: null });
-    recorder.record({ ts: now, kind: 50, lat: null, lon: null, status: 20, client: 0, mapcode: null }); // historical replay row
+    recorder.record({ ts: now, kind: 10, lat: null, lon: null, status: 20, client: 0, mapcode: null, country: null });
+    recorder.record({ ts: now - 7200, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 1, mapcode: null, country: null });
+    recorder.record({ ts: now, kind: 50, lat: null, lon: null, status: 20, client: 0, mapcode: null, country: null }); // historical replay row
     await recorder.close();
 
     const snap = StatsCache.fromScan(await scanStats(pool, now)).snapshot(now);
@@ -80,10 +93,10 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
     expect(total("1m")).toBe(1);
     expect(total("1h")).toBe(1);
     expect(total("1d")).toBe(2);
-    expect(total("all")).toBe(5); // 3 rows from the replay round-trip test + these 2; the kind-50 row is excluded
-    expect(snap.rows.find((r) => r.kind === 10)?.all).toBe(3); // ts=1000 round-trip row + these 2
+    expect(total("all")).toBe(6); // 3 replay round-trip rows + 1 anonymised row + these 2; the kind-50 row is excluded
+    expect(snap.rows.find((r) => r.kind === 10)?.all).toBe(4); // ts=1000 round-trip row + ts=1003 anonymised row + these 2
     expect(snap.rows.some((r) => r.kind === 50)).toBe(false);
-    expect(snap.rowCount).toBe(6); // all rows, the kind-50 one included
+    expect(snap.rowCount).toBe(7); // all rows, the kind-50 one included
   });
 
   it("measures storage sizes without a row count", async () => {

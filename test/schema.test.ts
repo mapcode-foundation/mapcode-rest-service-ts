@@ -40,6 +40,13 @@ describe("schema DDL", () => {
     expect(SCHEMA_DDL).not.toContain("CONCURRENTLY");
   });
 
+  it("adds the nullable country column idempotently, after the original columns", () => {
+    expect(SCHEMA_DDL).toContain("ALTER TABLE mapcode_request ADD COLUMN IF NOT EXISTS country text");
+    expect(SCHEMA_DDL.indexOf("ALTER TABLE")).toBeGreaterThan(SCHEMA_DDL.indexOf("CREATE TABLE"));
+    expect(SCHEMA_DDL).not.toMatch(/country\s+text\s+NOT NULL/);
+    expect(SCHEMA_DDL).not.toMatch(/country[^\n]*DEFAULT/);
+  });
+
   it("builds the ts btree concurrently and idempotently", () => {
     expect(BTREE_INDEX_DDL).toBe(
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS mapcode_request_ts_btree ON mapcode_request (ts)"

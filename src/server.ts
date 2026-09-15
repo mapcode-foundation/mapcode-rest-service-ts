@@ -64,7 +64,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // Per-request stash the route handlers fill for the recording hook.
   app.decorateRequest("recording", null);
   if (deps.recorder !== undefined) {
-    app.addHook("onResponse", createRecordingHook(deps.recorder));
+    app.addHook("onResponse", createRecordingHook(deps.recorder, deps.boundaryService));
   }
 
   // -------------------------------------------------------------------------

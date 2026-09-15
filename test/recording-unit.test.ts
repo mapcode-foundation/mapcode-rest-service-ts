@@ -23,6 +23,7 @@ import {
   kindFromRoute,
   rawQueryValue,
   isReplayFamilyUrl,
+  countryFromMatches,
 } from "../src/routes/recording.ts";
 
 describe("condenseStatus", () => {
@@ -142,5 +143,21 @@ describe("rawQueryValue", () => {
     expect(rawQueryValue({}, "client")).toBeUndefined();
     expect(rawQueryValue(null, "client")).toBeUndefined();
     expect(rawQueryValue(undefined, "client")).toBeUndefined();
+  });
+});
+
+describe("countryFromMatches", () => {
+  it("takes the top match, preferring its parent (subdivision → country)", () => {
+    expect(countryFromMatches([{ alphaCode: "NLD", parentAlphaCode: null, adminLevel: 2, area: 1 }])).toBe("NLD");
+    expect(
+      countryFromMatches([
+        { alphaCode: "USA-CA", parentAlphaCode: "USA", adminLevel: 4, area: 1 },
+        { alphaCode: "USA", parentAlphaCode: null, adminLevel: 2, area: 9 },
+      ])
+    ).toBe("USA");
+  });
+
+  it("returns null when nothing matched (sea, poles)", () => {
+    expect(countryFromMatches([])).toBeNull();
   });
 });

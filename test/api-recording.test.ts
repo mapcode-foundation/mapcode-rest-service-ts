@@ -53,7 +53,7 @@ async function inject(url: string, method = "GET"): Promise<RecordedRequest> {
 describe("recorded kinds and coordinates", () => {
   it("records an encode call with request-path microdegree coords", async () => {
     const e = await inject("/mapcode/codes/52.376514,4.908543");
-    expect(e).toMatchObject({ kind: KIND.codes, lat: 52376514, lon: 4908543, status: 20, client: 0, mapcode: null });
+    expect(e).toMatchObject({ kind: KIND.codes, lat: 52376514, lon: 4908543, status: 20, client: 0, mapcode: null, country: null });
     expect(Math.abs(e.ts - Math.floor(Date.now() / 1000))).toBeLessThanOrEqual(2);
   });
 
@@ -176,14 +176,49 @@ describe("replay endpoints are never recorded", () => {
 });
 
 describe("allowLog", () => {
-  it("suppresses recording for false/0/no (case-insensitive)", async () => {
+  // The borders fixture has an NLD square around (52, 5) and a USA-CA square
+  // (parent USA) around (36, -120); (0, 0) is open sea.
+  it("records an anonymised row for false/0/no (case-insensitive): no coords, no mapcode, but the country", async () => {
     for (const v of ["false", "FALSE", "0", "no", "No"]) {
-      await app.inject({ method: "GET", url: `/mapcode/territories?allowLog=${v}` });
+      const e = await inject(`/mapcode/codes/52.0,5.0?allowLog=${v}&client=demo`);
+      expect(e).toEqual({ ts: e.ts, kind: KIND.codes, lat: null, lon: null, status: 20, client: 5, mapcode: null, country: "NLD" });
+      expect(Math.abs(e.ts - Math.floor(Date.now() / 1000))).toBeLessThanOrEqual(2);
     }
+  });
+
+  it("stores the country, not the subdivision, and keeps the type variants' kinds", async () => {
+    expect(await inject("/mapcode/codes/36.0,-120.0?allowLog=false")).toMatchObject({ kind: KIND.codes, country: "USA", lat: null });
+    expect(await inject("/mapcode/codes/36.0,-120.0/local?allowLog=false")).toMatchObject({ kind: KIND.codesLocal, country: "USA" });
+    expect(await inject("/mapcode/codes/36.0,-120.0/territories?allowLog=false")).toMatchObject({
+      kind: KIND.codesTerritories,
+      country: "USA",
+    });
+  });
+
+  it("derives the country of an anonymised decode from the decoded point and drops the mapcode", async () => {
+    const res = await app.inject({ method: "GET", url: "/mapcode/codes/52.0,5.0/international" });
+    const code = encodeURIComponent((res.json() as { mapcode: string }).mapcode);
+    const e = await inject(`/mapcode/coords/${code}?allowLog=false`);
+    expect(e).toMatchObject({ kind: KIND.coords, lat: null, lon: null, mapcode: null, country: "NLD" });
+  });
+
+  it("records NULL country for sea points and non-geo endpoints", async () => {
+    expect(await inject("/mapcode/codes/0,0?allowLog=false")).toMatchObject({ kind: KIND.codes, lat: null, country: null });
+    expect(await inject("/mapcode/territories?allowLog=false")).toMatchObject({ kind: KIND.territories, lat: null, country: null });
+    expect(await inject("/mapcode/alphabets/roman?allowLog=no")).toMatchObject({ kind: KIND.alphabet, country: null });
+  });
+
+  it("still skips failed calls and monitoring noise when allowLog is false", async () => {
+    await app.inject({ method: "GET", url: "/mapcode/codes/abc?allowLog=false" });
+    await app.inject({ method: "GET", url: "/mapcode/status?allowLog=false" });
+    await app.inject({ method: "GET", url: "/mapcode/nope?allowLog=false" });
     expect(events).toHaveLength(0);
   });
 
-  it("records for absent, true, or garbage values", async () => {
+  it("records the full row (country NULL) for absent, true, or garbage values", async () => {
+    expect(await inject("/mapcode/codes/52.0,5.0?allowLog=true")).toMatchObject({ lat: 52000000, lon: 5000000, country: null });
+    expect(await inject("/mapcode/codes/52.0,5.0?allowLog=banana")).toMatchObject({ lat: 52000000, country: null });
+    events.length = 0;
     await app.inject({ method: "GET", url: "/mapcode/territories?allowLog=true" });
     await app.inject({ method: "GET", url: "/mapcode/territories?allowLog=banana" });
     expect(events).toHaveLength(2);

@@ -45,6 +45,11 @@ export const SCHEMA_DDL = `CREATE TABLE IF NOT EXISTS mapcode_request (
                                -- (see src/routes/recording.ts)
   mapcode text                 -- caller-provided mapcode; decode calls only
 );
+-- Added 2026-09-15 for allowLog=false calls, which are recorded anonymised:
+-- lat/lon/mapcode NULL, country set (borders-file alpha code, e.g. NLD).
+-- Full rows leave it NULL (derivable from lat/lon), so the 40-byte layout
+-- above is untouched. Nullable, no default: a metadata-only ALTER, no rewrite.
+ALTER TABLE mapcode_request ADD COLUMN IF NOT EXISTS country text;
 CREATE INDEX IF NOT EXISTS mapcode_request_ts_brin
   ON mapcode_request USING brin (ts);`;
 

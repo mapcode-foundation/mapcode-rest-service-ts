@@ -144,8 +144,11 @@ prefixes force XML / JSON regardless of the `Accept` header.
 recording (see below) when `MAPCODE_DB_URL` is set: `client` is classified into
 a one-byte caller class — `web`, `android`, `ios`, `demo`, anything else
 `other` (case-insensitive; the raw string is never stored) — and
-`allowLog=false|0|no` opts the request out of recording entirely. Without a
-database configured both are accepted and ignored. `web` is **deprecated** in
+`allowLog=false|0|no` opts the request out of full recording: the call is
+still counted, but anonymised — only its endpoint kind, status, client class
+and the **country** of the point are stored, never the coordinates or the
+mapcode (see below). Without a database configured both are accepted and
+ignored. `web` is **deprecated** in
 favour of `demo`: it is still accepted, but in practice it is sent by straight
 API callers rather than by a front-end, so treat that class as API use.
 
@@ -178,6 +181,14 @@ Only successful (status < 400) calls to real API endpoints are recorded:
 `/mapcode/status` and `/mapcode/version` (monitoring noise), the replay
 endpoints (meta-traffic), and invalid calls (bad parameters, unknown routes,
 bad methods) are not.
+
+A call with `allowLog=false|0|no` is recorded **anonymised**: `lat`, `lon` and
+`mapcode` are NULL and the `country` column holds the country of the requested
+(encode) or decoded (decode) point — the top-ranked borders-file match, lifted
+to its parent for a subdivision (`USA-CA` → `USA`); NULL at sea and for non-geo
+endpoints. Fully recorded rows leave `country` NULL, since it is derivable
+from the coordinates. Anonymised rows count towards the stats by kind, but
+never appear in `/mapcode/replay`, which only returns rows with coordinates.
 
 `GET /mapcode/replay` is token-protected — it requires
 `Authorization: Bearer <MAPCODE_REPLAY_TOKEN>`, else 401. It is JSON-only (no
