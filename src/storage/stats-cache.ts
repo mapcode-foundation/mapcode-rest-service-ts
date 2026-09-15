@@ -13,26 +13,30 @@
 // limitations under the License.
 
 import { CounterRing } from "./counter-ring.ts";
-import { STATS_WINDOWS, type StatsKindCounts } from "./stats-query.ts";
+import { STATS_WINDOWS, type StatsCounts, type StatsKindCounts } from "./stats-query.ts";
 
 // ---------------------------------------------------------------------------
-// StatsCache — per-kind all-time counter plus three CounterRings. Answers
-// every /mapcode/replay/stats window without touching the database. Rebuilt
-// from one scan (fromScan) every hour; fed per persisted event in between.
-// Correct only because the event log is append-only (see schema.ts).
+// StatsCache — per kind, two sets of {all-time counter + three CounterRings}:
+// one for fully recorded calls, one for anonymised (allowLog=false) ones.
+// Answers every /mapcode/replay/stats window without touching the database.
+// Rebuilt from one scan (fromScan) every hour; fed per persisted event in
+// between. Correct only because the event log is append-only (see schema.ts).
 // ---------------------------------------------------------------------------
 
 export interface StatsEvent {
   ts: number;
   kind: number;
+  /** True for an anonymised (allowLog=false) row. */
+  anon: boolean;
 }
 
 export type StatsTier = "all" | "hour" | "min" | "sec";
 
-/** One row of the rebuild scan (stats-query.ts). bucket is null for the all tier. */
+/** One row of the rebuild scan (stats-query.ts), per (kind, anon). bucket is null for the all tier. */
 export interface StatsScanRow {
   tier: StatsTier;
   kind: number;
+  anon: boolean;
   bucket: number | null;
   n: number;
 }
@@ -60,14 +64,21 @@ const WINDOW_TIER: Record<(typeof STATS_WINDOWS)[number]["key"], Exclude<StatsTi
 // occupy disk (rowCount) but are not API usage (totals).
 const REPLAY_KIND = 50;
 
-interface KindCounters {
+/** All-time counter plus the three ring tiers. */
+interface Rings {
   all: number;
   sec: CounterRing;
   min: CounterRing;
   hour: CounterRing;
 }
 
-function newKindCounters(): KindCounters {
+/** Per kind: fully recorded calls and anonymised ones, counted apart. */
+interface KindCounters {
+  full: Rings;
+  anon: Rings;
+}
+
+function newRings(): Rings {
   return {
     all: 0,
     sec: new CounterRing(TIERS.sec.widthSeconds, TIERS.sec.slots),
@@ -76,27 +87,35 @@ function newKindCounters(): KindCounters {
   };
 }
 
+function windowCounts(rings: Rings, now: number): StatsCounts {
+  const counts = { all: rings.all } as StatsCounts;
+  for (const { key, seconds } of STATS_WINDOWS) {
+    counts[key] = rings[WINDOW_TIER[key]].count(now - seconds, now);
+  }
+  return counts;
+}
+
 export class StatsCache {
   private readonly kinds = new Map<number, KindCounters>();
 
-  private counters(kind: number): KindCounters {
+  private rings(kind: number, anon: boolean): Rings {
     let c = this.kinds.get(kind);
     if (c === undefined) {
-      c = newKindCounters();
+      c = { full: newRings(), anon: newRings() };
       this.kinds.set(kind, c);
     }
-    return c;
+    return anon ? c.anon : c.full;
   }
 
   /** Build a cache from the rebuild scan. Row order is irrelevant. */
   static fromScan(rows: readonly StatsScanRow[]): StatsCache {
     const cache = new StatsCache();
     for (const row of rows) {
-      const c = cache.counters(row.kind);
+      const r = cache.rings(row.kind, row.anon);
       if (row.tier === "all") {
-        c.all += row.n;
+        r.all += row.n;
       } else if (row.bucket !== null) {
-        const ring = c[row.tier];
+        const ring = r[row.tier];
         ring.add(row.bucket * ring.widthSeconds, row.n);
       }
     }
@@ -105,24 +124,29 @@ export class StatsCache {
 
   /** Count one persisted event. */
   add(e: StatsEvent): void {
-    const c = this.counters(e.kind);
-    c.all += 1;
-    c.sec.add(e.ts);
-    c.min.add(e.ts);
-    c.hour.add(e.ts);
+    const r = this.rings(e.kind, e.anon);
+    r.all += 1;
+    r.sec.add(e.ts);
+    r.min.add(e.ts);
+    r.hour.add(e.ts);
   }
 
-  /** Per-kind window counts (kind 50 excluded, ascending kind) and the physical row count. */
+  /**
+   * Per-kind window counts (kind 50 excluded, ascending kind) and the physical
+   * row count. A kind's counts are full + anon; its `anon` block is the subset.
+   */
   snapshot(now: number): { rows: StatsKindCounts[]; rowCount: number } {
     const rows: StatsKindCounts[] = [];
     let rowCount = 0;
     for (const kind of [...this.kinds.keys()].sort((a, b) => a - b)) {
       const c = this.kinds.get(kind)!;
-      rowCount += c.all;
+      rowCount += c.full.all + c.anon.all;
       if (kind === REPLAY_KIND) continue;
-      const row = { kind, all: c.all } as StatsKindCounts;
-      for (const { key, seconds } of STATS_WINDOWS) {
-        row[key] = c[WINDOW_TIER[key]].count(now - seconds, now);
+      const full = windowCounts(c.full, now);
+      const anon = windowCounts(c.anon, now);
+      const row = { kind, anon } as StatsKindCounts;
+      for (const key of Object.keys(full) as (keyof StatsCounts)[]) {
+        row[key] = full[key] + anon[key];
       }
       rows.push(row);
     }

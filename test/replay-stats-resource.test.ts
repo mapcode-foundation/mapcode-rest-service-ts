@@ -19,17 +19,20 @@ import { StatsNotReadyError } from "../src/storage/stats-service.ts";
 import type { StatsKindCounts, StorageInfo } from "../src/storage/stats-query.ts";
 
 const NOW = 1_737_100_000;
+const ZERO = { "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 0 };
 // tableBytes / rowCount is exactly 44; rowCount exceeds totals.all (historical replay rows).
 const STORAGE: StorageInfo = { databaseBytes: 116_000_000, tableBytes: 105_600_000, rowCount: 2_400_000 };
 const storageQuery = async () => STORAGE;
-// Two kinds whose window sums equal the totals asserted below.
+// Two kinds whose window sums equal the totals asserted below; the anon subsets sum likewise.
+const ANON_10 = { "1m": 1, "1h": 20, "1d": 100, "7d": 100, "31d": 2, "1y": 3, all: 200 };
+const ANON_2 = { "1m": 0, "1h": 10, "1d": 300, "7d": 3000, "31d": 11998, "1y": 149997, all: 199800 };
 const ROWS: StatsKindCounts[] = [
-  { kind: 10, "1m": 2, "1h": 41, "1d": 121, "7d": 100, "31d": 2, "1y": 3, all: 1000 },
-  { kind: 2, "1m": 10, "1h": 300, "1d": 5000, "7d": 40000, "31d": 160000, "1y": 1900000, all: 2399000 },
+  { kind: 10, "1m": 2, "1h": 41, "1d": 121, "7d": 100, "31d": 2, "1y": 3, all: 1000, anon: ANON_10 },
+  { kind: 2, "1m": 10, "1h": 300, "1d": 5000, "7d": 40000, "31d": 160000, "1y": 1900000, all: 2399000, anon: ANON_2 },
 ];
 
 describe("handleReplayStats", () => {
-  it("sums totals across kinds, derives avg events/hr for 1d..1y, and names each kind", async () => {
+  it("sums totals and anon across kinds, derives avg events/hr for 1d..1y from totals, and names each kind", async () => {
     const seen: number[] = [];
     const { dto, cacheControl } = await handleReplayStats(NOW, async (now) => {
       seen.push(now);
@@ -39,6 +42,7 @@ describe("handleReplayStats", () => {
     expect(dto).toEqual({
       now: NOW,
       totals: { "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, all: 2400000 },
+      anon: { "1m": 1, "1h": 30, "1d": 400, "7d": 3100, "31d": 12000, "1y": 150000, all: 200000 },
       avgPerHour: {
         "1d": 213.4, // 5121 / 24
         "7d": 238.7, // 40100 / 168
@@ -51,11 +55,13 @@ describe("handleReplayStats", () => {
           kind: 2,
           name: "status",
           totals: { "1m": 10, "1h": 300, "1d": 5000, "7d": 40000, "31d": 160000, "1y": 1900000, all: 2399000 },
+          anon: ANON_2,
         },
         {
           kind: 10,
           name: "codes",
           totals: { "1m": 2, "1h": 41, "1d": 121, "7d": 100, "31d": 2, "1y": 3, all: 1000 },
+          anon: ANON_10,
         },
       ],
       storage: {
@@ -69,6 +75,16 @@ describe("handleReplayStats", () => {
     expect(cacheControl).toBe(`private, max-age=${STATS_CACHE_SECONDS}`);
   });
 
+  it("keeps anon within totals, window by window, at the top level and per kind", async () => {
+    const { dto } = await handleReplayStats(NOW, async () => ROWS, storageQuery);
+    const totals = dto.totals as Record<string, number>;
+    const anon = dto.anon as Record<string, number>;
+    for (const key of Object.keys(totals)) expect(anon[key]).toBeLessThanOrEqual(totals[key]);
+    for (const entry of dto.byKind as { totals: Record<string, number>; anon: Record<string, number> }[]) {
+      for (const key of Object.keys(entry.totals)) expect(entry.anon[key]).toBeLessThanOrEqual(entry.totals[key]);
+    }
+  });
+
   it("returns zero totals, empty byKind, and a zero burn rate for an empty database", async () => {
     const { dto } = await handleReplayStats(NOW, async () => [], async () => ({
       databaseBytes: 8_000_000,
@@ -78,6 +94,7 @@ describe("handleReplayStats", () => {
     expect(dto).toEqual({
       now: NOW,
       totals: { "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 0 },
+      anon: ZERO,
       avgPerHour: { "1d": 0, "7d": 0, "31d": 0, "1y": 0 },
       byKind: [],
       storage: { databaseBytes: 8_000_000, tableBytes: 0, rowCount: 0, bytesPerRow: 0, bytesPerDay: 0 },
@@ -86,7 +103,7 @@ describe("handleReplayStats", () => {
 
   it("labels a kind missing from the vocabulary as unknown", async () => {
     const { dto } = await handleReplayStats(NOW, async () => [
-      { kind: 77, "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 1 },
+      { kind: 77, "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 1, anon: ZERO },
     ], storageQuery);
     expect((dto.byKind as { kind: number; name: string }[])[0]).toMatchObject({ kind: 77, name: "unknown" });
   });

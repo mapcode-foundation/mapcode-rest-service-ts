@@ -215,6 +215,7 @@ export function createRecordingHook(recorder: RequestRecorder, boundaryService: 
               lon: null,
               mapcode: null,
               country: hasPoint ? countryFromMatches(boundaryService.lookup(stash.latDeg!, stash.lonDeg!)) : null,
+              anon: true,
             });
           } else {
             // Full row; country stays NULL — it is derivable from lat/lon.
@@ -224,6 +225,7 @@ export function createRecordingHook(recorder: RequestRecorder, boundaryService: 
               lon: hasPoint ? lonToMicro(stash.lonDeg!) : null,
               mapcode: stash?.mapcode ?? null,
               country: null,
+              anon: false,
             });
           }
         }

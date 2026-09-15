@@ -41,9 +41,13 @@ export interface StatsCounts {
   all: number;
 }
 
-/** One result row: the window counts for a single endpoint kind. */
+/**
+ * One result row: the window counts for a single endpoint kind, anonymised
+ * (allowLog=false) calls included, plus that anonymised subset on its own.
+ */
 export interface StatsKindCounts extends StatsCounts {
   kind: number;
+  anon: StatsCounts;
 }
 
 export type StatsQueryFn = (nowEpochSeconds: number) => Promise<StatsKindCounts[]>;
@@ -61,17 +65,18 @@ export type StorageQueryFn = () => Promise<StorageInfo>;
  * One statement → one MVCC snapshot across all four tiers. The `all` branch
  * is the single full table scan; it runs every hour, never per request.
  * No kind filter: the cache needs kind-50 rows for the physical rowCount and
- * drops them from totals itself.
+ * drops them from totals itself. Every tier groups by (kind, anon) so the
+ * cache can keep the anonymised subset apart.
  */
 export function buildStatsScanQuery(nowEpochSeconds: number): { text: string; values: unknown[] } {
   const text =
-    "SELECT 'all' AS tier, kind, NULL::int AS bucket, count(*) AS n FROM mapcode_request GROUP BY kind" +
+    "SELECT 'all' AS tier, kind, anon, NULL::int AS bucket, count(*) AS n FROM mapcode_request GROUP BY kind, anon" +
     " UNION ALL " +
-    "SELECT 'hour' AS tier, kind, (ts / 3600)::int AS bucket, count(*) AS n FROM mapcode_request WHERE ts >= $1 GROUP BY kind, ts / 3600" +
+    "SELECT 'hour' AS tier, kind, anon, (ts / 3600)::int AS bucket, count(*) AS n FROM mapcode_request WHERE ts >= $1 GROUP BY kind, anon, ts / 3600" +
     " UNION ALL " +
-    "SELECT 'min' AS tier, kind, (ts / 60)::int AS bucket, count(*) AS n FROM mapcode_request WHERE ts >= $2 GROUP BY kind, ts / 60" +
+    "SELECT 'min' AS tier, kind, anon, (ts / 60)::int AS bucket, count(*) AS n FROM mapcode_request WHERE ts >= $2 GROUP BY kind, anon, ts / 60" +
     " UNION ALL " +
-    "SELECT 'sec' AS tier, kind, ts AS bucket, count(*) AS n FROM mapcode_request WHERE ts >= $3 GROUP BY kind, ts";
+    "SELECT 'sec' AS tier, kind, anon, ts AS bucket, count(*) AS n FROM mapcode_request WHERE ts >= $3 GROUP BY kind, anon, ts";
   const values = [
     nowEpochSeconds - TIERS.hour.widthSeconds * TIERS.hour.slots,
     nowEpochSeconds - TIERS.min.widthSeconds * TIERS.min.slots,
@@ -82,11 +87,11 @@ export function buildStatsScanQuery(nowEpochSeconds: number): { text: string; va
 
 export async function scanStats(pool: RecorderPool, nowEpochSeconds: number): Promise<StatsScanRow[]> {
   const { text, values } = buildStatsScanQuery(nowEpochSeconds);
-  // count(*) is int8 → string from pg; kind (int2) and bucket (int4) stay numbers.
+  // count(*) is int8 → string from pg; kind (int2) and bucket (int4) stay numbers, anon is a native boolean.
   const result = (await pool.query(text, values)) as {
-    rows: { tier: StatsTier; kind: number; bucket: number | null; n: string }[];
+    rows: { tier: StatsTier; kind: number; anon: boolean; bucket: number | null; n: string }[];
   };
-  return result.rows.map((row) => ({ tier: row.tier, kind: row.kind, bucket: row.bucket, n: Number(row.n) }));
+  return result.rows.map((row) => ({ tier: row.tier, kind: row.kind, anon: row.anon, bucket: row.bucket, n: Number(row.n) }));
 }
 
 // Catalog/stat lookups, milliseconds each. rowCount comes from StatsCache;

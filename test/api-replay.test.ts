@@ -24,7 +24,7 @@ import type { StatsKindCounts, StorageInfo } from "../src/storage/stats-query.ts
 
 const TOKEN = "test-token";
 const AUTH = { authorization: `Bearer ${TOKEN}` };
-const EMPTY: ReplayColumns = { ts: [], kind: [], lat: [], lon: [], status: [], client: [], mapcode: [] };
+const EMPTY: ReplayColumns = { ts: [], kind: [], lat: [], lon: [], status: [], client: [], mapcode: [], country: [], anon: [] };
 const NO_ROWS: StatsKindCounts[] = [];
 const STORAGE: StorageInfo = { databaseBytes: 116_000_000, tableBytes: 105_600_000, rowCount: 2_400_000 };
 
@@ -98,7 +98,17 @@ describe("validation", () => {
 
 describe("response", () => {
   it("returns the columnar shape with CORS and cache headers for a past window", async () => {
-    queryResult = { ts: [1001], kind: [10], lat: [52376514], lon: [4908543], status: [20], client: [1], mapcode: [null] };
+    queryResult = {
+      ts: [1001, 1002],
+      kind: [10, 10],
+      lat: [52376514, null],
+      lon: [4908543, null],
+      status: [20, 20],
+      client: [1, 5],
+      mapcode: [null, null],
+      country: [null, "NLD"],
+      anon: [0, 1],
+    };
     const res = await app.inject({ method: "GET", url: "/mapcode/replay?from=1000&to=2000", headers: AUTH });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toMatch(/application\/json/);
@@ -107,15 +117,17 @@ describe("response", () => {
     expect(JSON.parse(res.body)).toEqual({
       from: 1000,
       to: 2000,
-      count: 1,
+      count: 2,
       truncated: false,
-      ts: [1001],
-      kind: [10],
-      lat: [52376514],
-      lon: [4908543],
-      status: [20],
-      client: [1],
-      mapcode: [null],
+      ts: [1001, 1002],
+      kind: [10, 10],
+      lat: [52376514, null],
+      lon: [4908543, null],
+      status: [20, 20],
+      client: [1, 5],
+      mapcode: [null, null],
+      country: [null, "NLD"],
+      anon: [0, 1],
     });
   });
 
@@ -128,7 +140,17 @@ describe("response", () => {
   });
 
   it("reports truncation and passes limit and kinds through", async () => {
-    queryResult = { ts: [1, 2], kind: [10, 10], lat: [0, 0], lon: [0, 0], status: [20, 20], client: [0, 0], mapcode: [null, null] };
+    queryResult = {
+      ts: [1, 2],
+      kind: [10, 10],
+      lat: [0, 0],
+      lon: [0, 0],
+      status: [20, 20],
+      client: [0, 0],
+      mapcode: [null, null],
+      country: [null, null],
+      anon: [0, 0],
+    };
     const res = await app.inject({ method: "GET", url: "/mapcode/replay?from=1000&to=2000&limit=2&kind=10,20", headers: AUTH });
     expect(JSON.parse(res.body)).toMatchObject({ count: 2, truncated: true });
     expect(queryCalls[0]).toMatchObject({ limit: 2, kinds: [10, 20] });
@@ -144,6 +166,8 @@ describe("response", () => {
       status: Array(n).fill(20),
       client: Array(n).fill(0),
       mapcode: Array(n).fill(null),
+      country: Array(n).fill(null),
+      anon: Array(n).fill(0),
     };
     const res = await app.inject({
       method: "GET",
@@ -165,7 +189,8 @@ describe("stats", () => {
   });
 
   it("returns totals, avgPerHour, byKind, and storage with CORS and a short cache", async () => {
-    statsResult = [{ kind: 10, "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, all: 2400000 }];
+    const anon = { "1m": 1, "1h": 30, "1d": 400, "7d": 3100, "31d": 12000, "1y": 150000, all: 200000 };
+    statsResult = [{ kind: 10, "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, all: 2400000, anon }];
     const before = Math.floor(Date.now() / 1000);
     const res = await app.inject({ method: "GET", url: "/mapcode/replay/stats", headers: AUTH });
     expect(res.statusCode).toBe(200);
@@ -174,12 +199,14 @@ describe("stats", () => {
     expect(res.headers["cache-control"]).toBe("private, max-age=60");
     const body = JSON.parse(res.body);
     expect(body.totals).toEqual({ "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, all: 2400000 });
+    expect(body.anon).toEqual(anon);
     expect(body.avgPerHour).toEqual({ "1d": 213.4, "7d": 238.7, "31d": 215.1, "1y": 216.9 });
     expect(body.byKind).toEqual([
       {
         kind: 10,
         name: "codes",
         totals: { "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, all: 2400000 },
+        anon,
       },
     ]);
     expect(body.storage).toEqual({

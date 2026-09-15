@@ -17,7 +17,7 @@ import { handleReplay, REPLAY_WINDOW_MAX_SECONDS, REPLAY_LIMIT_MAX } from "../sr
 import { ApiError } from "../src/errors.ts";
 import type { ReplayColumns, ReplayQueryArgs } from "../src/storage/replay-query.ts";
 
-const EMPTY: ReplayColumns = { ts: [], kind: [], lat: [], lon: [], status: [], client: [], mapcode: [] };
+const EMPTY: ReplayColumns = { ts: [], kind: [], lat: [], lon: [], status: [], client: [], mapcode: [], country: [], anon: [] };
 const NOW = 1_737_100_000;
 
 function fakeQuery(result: ReplayColumns = EMPTY) {
@@ -99,18 +99,22 @@ describe("handleReplay behavior", () => {
 
   it("builds the columnar dto with count and truncated", async () => {
     const result: ReplayColumns = {
-      ts: [NOW - 7200 + 1, NOW - 7200 + 2],
-      kind: [10, 20],
-      lat: [1, 2],
-      lon: [3, 4],
-      status: [20, 20],
-      client: [0, 1],
-      mapcode: [null, "NLD 49.4V"],
+      ts: [NOW - 7200 + 1, NOW - 7200 + 2, NOW - 7200 + 3],
+      kind: [10, 20, 10],
+      lat: [1, 2, null],
+      lon: [3, 4, null],
+      status: [20, 20, 20],
+      client: [0, 1, 5],
+      mapcode: [null, "NLD 49.4V", null],
+      country: [null, null, "NLD"],
+      anon: [0, 0, 1],
     };
     const { fn } = fakeQuery(result);
-    const { dto } = await handleReplay({ from: String(NOW - 7200), to: String(NOW - 3600), limit: "2" }, NOW, fn);
-    expect(dto).toEqual({ from: NOW - 7200, to: NOW - 3600, count: 2, truncated: true, ...result });
-    expect(Object.keys(dto)).toEqual(["from", "to", "count", "truncated", "ts", "kind", "lat", "lon", "status", "client", "mapcode"]);
+    const { dto } = await handleReplay({ from: String(NOW - 7200), to: String(NOW - 3600), limit: "3" }, NOW, fn);
+    expect(dto).toEqual({ from: NOW - 7200, to: NOW - 3600, count: 3, truncated: true, ...result });
+    expect(Object.keys(dto)).toEqual([
+      "from", "to", "count", "truncated", "ts", "kind", "lat", "lon", "status", "client", "mapcode", "country", "anon",
+    ]);
   });
 
   it("is not truncated below the limit", async () => {

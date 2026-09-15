@@ -50,12 +50,30 @@ export const SCHEMA_DDL = `CREATE TABLE IF NOT EXISTS mapcode_request (
 -- Full rows leave it NULL (derivable from lat/lon), so the 40-byte layout
 -- above is untouched. Nullable, no default: a metadata-only ALTER, no rewrite.
 ALTER TABLE mapcode_request ADD COLUMN IF NOT EXISTS country text;
+-- Added 2026-09-15: true for allowLog=false rows (anonymised). country alone
+-- cannot mark them: non-geo kinds and open-sea points have no country, so an
+-- anonymised territories call would look like a full one. A constant default
+-- is metadata-only on Postgres 11+, no table rewrite.
+ALTER TABLE mapcode_request ADD COLUMN IF NOT EXISTS anon boolean NOT NULL DEFAULT false;
 CREATE INDEX IF NOT EXISTS mapcode_request_ts_brin
   ON mapcode_request USING brin (ts);`;
 
-/** Idempotent schema bootstrap (CREATE ... IF NOT EXISTS). */
+/**
+ * One-off backfill for anonymised rows written before the anon marker existed
+ * (country landed first, anon later). Those are exactly the geo-kind rows
+ * without a point: the recorder never writes a geo kind with lat NULL unless
+ * the call opted out. Setting a flag on rows that are anonymised by
+ * construction does not breach the append-only rule (no row is removed or
+ * reinterpreted). Idempotent via NOT anon, so ensureSchema can run it on every
+ * bootstrap; it only ever does work once.
+ */
+export const ANON_BACKFILL_SQL =
+  "UPDATE mapcode_request SET anon = true WHERE lat IS NULL AND kind IN (10, 11, 12, 13, 20) AND NOT anon";
+
+/** Idempotent schema bootstrap (CREATE ... IF NOT EXISTS), then the anon backfill. */
 export async function ensureSchema(pool: RecorderPool): Promise<void> {
   await pool.query(SCHEMA_DDL);
+  await pool.query(ANON_BACKFILL_SQL);
 }
 
 /**

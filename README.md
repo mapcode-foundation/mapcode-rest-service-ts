@@ -183,12 +183,24 @@ endpoints (meta-traffic), and invalid calls (bad parameters, unknown routes,
 bad methods) are not.
 
 A call with `allowLog=false|0|no` is recorded **anonymised**: `lat`, `lon` and
-`mapcode` are NULL and the `country` column holds the country of the requested
-(encode) or decoded (decode) point — the top-ranked borders-file match, lifted
-to its parent for a subdivision (`USA-CA` → `USA`); NULL at sea and for non-geo
-endpoints. Fully recorded rows leave `country` NULL, since it is derivable
-from the coordinates. Anonymised rows count towards the stats by kind, but
-never appear in `/mapcode/replay`, which only returns rows with coordinates.
+`mapcode` are NULL, `anon` is true, and the `country` column holds the country
+of the requested (encode) or decoded (decode) point — the top-ranked
+borders-file match, lifted to its parent for a subdivision (`USA-CA` → `USA`);
+NULL at sea and for non-geo endpoints. Fully recorded rows leave `country`
+NULL, since it is derivable from the coordinates, and `anon` false. The `anon`
+flag is the only reliable marker: `country` alone cannot tell an anonymised
+`territories` call or an at-sea encode from a fully recorded non-geo row.
+Anonymised rows count towards the stats by kind (and are reported separately
+as `anon`, see below) and are returned by `/mapcode/replay` with `lat`, `lon`
+and `mapcode` null and `anon: 1`, so a client can stack them into a timeline;
+fully recorded non-geo rows are not returned, since they cannot be plotted.
+
+The `anon` column arrived after `country`. Rows anonymised in between are
+geo-kind rows without a point, and the schema bootstrap backfills their flag
+automatically with one idempotent `UPDATE ... WHERE lat IS NULL AND kind IN
+(10, 11, 12, 13, 20) AND NOT anon` on every start (it only ever does work
+once). This sets a flag on rows that are anonymised by construction; no row is
+removed or reinterpreted, so the append-only rule holds. No manual step.
 
 `GET /mapcode/replay` is token-protected — it requires
 `Authorization: Bearer <MAPCODE_REPLAY_TOKEN>`, else 401. It is JSON-only (no
@@ -203,7 +215,11 @@ never appear in `/mapcode/replay`, which only returns rows with coordinates.
 
 The window (`to - from`) is capped at 365 days. The response is a columnar JSON
 object (`{from, to, count, truncated, ts, kind, lat, lon, status, client,
-mapcode}`) shaped for a canvas/WebGL renderer to iterate directly. Windows
+mapcode, country, anon}`) shaped for a canvas/WebGL renderer to iterate
+directly. `anon` is `1` for an anonymised row and `0` otherwise; anonymised
+rows have `lat`, `lon` and `mapcode` `null` and carry their `country` (`null`
+at sea and for non-geo endpoints), fully recorded rows have `country: null`.
+Windows
 that end more than a minute in the past are cacheable
 (`Cache-Control: private, max-age=3600`); more recent windows are `no-store`,
 since events can take a few seconds to leave the recorder's queue and become
@@ -218,17 +234,33 @@ not recorded, and historical replay rows are excluded from the counts:
 {
   "now": 1756800000,
   "totals": { "1m": 12, "1h": 341, "1d": 5121, "7d": 40100, "31d": 160002, "1y": 1900003, "all": 2400000 },
+  "anon": { "1m": 1, "1h": 30, "1d": 400, "7d": 3100, "31d": 12000, "1y": 150000, "all": 200000 },
   "avgPerHour": { "1d": 213.4, "7d": 238.7, "31d": 215.1, "1y": 216.9 },
   "byKind": [
-    { "kind": 2, "name": "status", "totals": { "1m": 10, "1h": 300, "1d": 5000, "7d": 40000, "31d": 160000, "1y": 1900000, "all": 2399000 } },
-    { "kind": 10, "name": "codes", "totals": { "1m": 2, "1h": 41, "1d": 121, "7d": 100, "31d": 2, "1y": 3, "all": 1000 } }
+    {
+      "kind": 2, "name": "status",
+      "totals": { "1m": 10, "1h": 300, "1d": 5000, "7d": 40000, "31d": 160000, "1y": 1900000, "all": 2399000 },
+      "anon": { "1m": 0, "1h": 10, "1d": 300, "7d": 3000, "31d": 11998, "1y": 149997, "all": 199800 }
+    },
+    {
+      "kind": 10, "name": "codes",
+      "totals": { "1m": 2, "1h": 41, "1d": 121, "7d": 100, "31d": 2, "1y": 3, "all": 1000 },
+      "anon": { "1m": 1, "1h": 20, "1d": 100, "7d": 100, "31d": 2, "1y": 3, "all": 200 }
+    }
   ],
   "storage": { "databaseBytes": 116000000, "tableBytes": 105600000, "rowCount": 2400000, "bytesPerRow": 44, "bytesPerDay": 225324 }
 }
 ```
 
+`totals` counts every call, anonymised ones included; `anon` is the anonymised
+subset over the same windows, so `anon[w] <= totals[w]` always. Each `byKind`
+entry carries the same pair for its kind. `avgPerHour` and
+`storage.bytesPerDay` are derived from `totals` (anonymised rows occupy rows
+too).
+
 Stats are served from an in-memory cache, not from a query: every recorded
-event increments per-kind time buckets, and the cache is rebuilt from one
+event increments per-kind (and per anonymised/full) time buckets, and the
+cache is rebuilt from one
 full scan at startup, once more 5 minutes later (a catch-up for rows the
 outgoing instance of a rolling deploy wrote after the boot scan), then every
 hour (retried after 5 minutes on failure).

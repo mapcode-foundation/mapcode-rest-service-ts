@@ -31,6 +31,8 @@ export interface RecordedRequest {
   mapcode: string | null;
   /** Country alpha code (borders file vocabulary, e.g. NLD); set only on anonymised (allowLog=false) rows. */
   country: string | null;
+  /** True for an anonymised (allowLog=false) row; the only reliable marker for non-geo and at-sea ones. */
+  anon: boolean;
 }
 
 export interface RequestRecorder {
@@ -76,12 +78,12 @@ const NOOP_RECORDER: RequestRecorder = {
 export function insertSql(rowCount: number): string {
   const groups: string[] = [];
   for (let i = 0; i < rowCount; i++) {
-    const b = i * 8;
+    const b = i * 9;
     groups.push(
-      `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5}::int::"char",$${b + 6}::int::"char",$${b + 7},$${b + 8})`
+      `($${b + 1},$${b + 2},$${b + 3},$${b + 4},$${b + 5}::int::"char",$${b + 6}::int::"char",$${b + 7},$${b + 8},$${b + 9})`
     );
   }
-  return `INSERT INTO mapcode_request (ts,lat,lon,kind,status,client,mapcode,country) VALUES ${groups.join(",")}`;
+  return `INSERT INTO mapcode_request (ts,lat,lon,kind,status,client,mapcode,country,anon) VALUES ${groups.join(",")}`;
 }
 
 export function createRequestRecorder(pool: RecorderPool | null, options: RecorderOptions = {}): RequestRecorder {
@@ -114,7 +116,7 @@ export function createRequestRecorder(pool: RecorderPool | null, options: Record
           await ensureSchema(pool);
           schemaReady = true;
         }
-        const values = batch.flatMap((e) => [e.ts, e.lat, e.lon, e.kind, e.status, e.client, e.mapcode, e.country]);
+        const values = batch.flatMap((e) => [e.ts, e.lat, e.lon, e.kind, e.status, e.client, e.mapcode, e.country, e.anon]);
         await pool.query(insertSql(batch.length), values);
         if (options.onPersisted !== undefined) {
           try {

@@ -14,7 +14,13 @@
 
 import { ApiError } from "../errors.ts";
 import { StatsNotReadyError } from "../storage/stats-service.ts";
-import { STATS_WINDOWS, type StatsCounts, type StatsQueryFn, type StorageQueryFn } from "../storage/stats-query.ts";
+import {
+  STATS_WINDOWS,
+  type StatsCounts,
+  type StatsKindCounts,
+  type StatsQueryFn,
+  type StorageQueryFn,
+} from "../storage/stats-query.ts";
 import { KIND } from "../routes/recording.ts";
 
 // ---------------------------------------------------------------------------
@@ -22,7 +28,8 @@ import { KIND } from "../routes/recording.ts";
 // No parameters: the windows are fixed, anchored at "now". Averages are only
 // meaningful from 1d up (shorter windows are too bursty), so avgPerHour covers
 // 1d..1y and skips "all" (whose span is unknown). The query returns one row
-// per kind; totals are their sums.
+// per kind; totals are their sums, anonymised calls included, and `anon` is
+// the sum of their anonymised subsets (so anon[w] <= totals[w] always).
 // ---------------------------------------------------------------------------
 
 export const STATS_CACHE_SECONDS = 60;
@@ -54,23 +61,23 @@ export async function handleReplayStats(
     // Never let raw pg error text (hostnames, usernames, ...) reach the response body.
     throw new ApiError(500, "Internal Server Error");
   }
-  const sum = (key: keyof StatsCounts) => rows.reduce((acc, row) => acc + row[key], 0);
-  const totals: StatsCounts = {
-    "1m": sum("1m"),
-    "1h": sum("1h"),
-    "1d": sum("1d"),
-    "7d": sum("7d"),
-    "31d": sum("31d"),
-    "1y": sum("1y"),
-    all: sum("all"),
+  const sum = (pick: (row: StatsKindCounts) => StatsCounts): StatsCounts => {
+    const acc: StatsCounts = { "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 0 };
+    for (const row of rows) {
+      const counts = pick(row);
+      for (const key of Object.keys(acc) as (keyof StatsCounts)[]) acc[key] += counts[key];
+    }
+    return acc;
   };
+  const totals = sum((row) => row);
+  const anon = sum((row) => row.anon);
   const avgPerHour: Record<string, number> = {};
   for (const { key, seconds } of AVG_WINDOWS) {
     avgPerHour[key] = Math.round((totals[key] / (seconds / 3600)) * 10) / 10;
   }
   const byKind = [...rows]
     .sort((a, b) => b.all - a.all)
-    .map(({ kind, ...counts }) => ({ kind, name: KIND_NAMES[kind] ?? "unknown", totals: counts }));
+    .map(({ kind, anon: anonCounts, ...counts }) => ({ kind, name: KIND_NAMES[kind] ?? "unknown", totals: counts, anon: anonCounts }));
   // Burn rate: last-day event count times the average on-disk footprint per
   // row (indexes included). rowCount is the physical row count — it can exceed
   // totals.all because historical replay rows still occupy space.
@@ -81,7 +88,7 @@ export async function handleReplayStats(
     bytesPerDay: Math.round(bytesPerRowExact * totals["1d"]),
   };
   return {
-    dto: { now: nowEpochSeconds, totals, avgPerHour, byKind, storage },
+    dto: { now: nowEpochSeconds, totals, anon, avgPerHour, byKind, storage },
     cacheControl: `private, max-age=${STATS_CACHE_SECONDS}`,
   };
 }

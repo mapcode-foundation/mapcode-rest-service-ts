@@ -22,7 +22,7 @@ import {
 import { SCHEMA_DDL } from "../src/storage/schema.ts";
 
 function event(overrides: Partial<RecordedRequest> = {}): RecordedRequest {
-  return { ts: 1000, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 0, mapcode: null, country: null, ...overrides };
+  return { ts: 1000, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 0, mapcode: null, country: null, anon: false, ...overrides };
 }
 
 interface Call {
@@ -61,20 +61,20 @@ afterEach(() => {
 describe("insertSql", () => {
   it('builds a parameterized multi-row insert with "char" casts', () => {
     expect(insertSql(1)).toBe(
-      'INSERT INTO mapcode_request (ts,lat,lon,kind,status,client,mapcode,country)' +
-        ' VALUES ($1,$2,$3,$4,$5::int::"char",$6::int::"char",$7,$8)'
+      'INSERT INTO mapcode_request (ts,lat,lon,kind,status,client,mapcode,country,anon)' +
+        ' VALUES ($1,$2,$3,$4,$5::int::"char",$6::int::"char",$7,$8,$9)'
     );
-    expect(insertSql(2)).toContain('($9,$10,$11,$12,$13::int::"char",$14::int::"char",$15,$16)');
+    expect(insertSql(2)).toContain('($10,$11,$12,$13,$14::int::"char",$15::int::"char",$16,$17,$18)');
   });
 });
 
 describe("createRequestRecorder", () => {
-  it("passes the country through as the 8th column of an anonymised row", async () => {
+  it("passes the country and the anon marker through as the 8th and 9th columns of an anonymised row", async () => {
     const pool = fakePool();
     const recorder = createRequestRecorder(pool, { flushIntervalMs: 60_000 });
-    recorder.record(event({ lat: null, lon: null, country: "NLD" }));
+    recorder.record(event({ lat: null, lon: null, country: "NLD", anon: true }));
     await recorder.flush();
-    expect(pool.inserts()[0].values).toEqual([1000, null, null, 10, 20, 0, null, "NLD"]);
+    expect(pool.inserts()[0].values).toEqual([1000, null, null, 10, 20, 0, null, "NLD", true]);
     await recorder.close();
   });
 
@@ -96,8 +96,8 @@ describe("createRequestRecorder", () => {
     expect(pool.calls[0].text).toBe(SCHEMA_DDL);
     expect(pool.inserts()).toHaveLength(1);
     expect(pool.inserts()[0].values).toEqual([
-      1000, 52376514, 4908543, 10, 20, 0, null, null,
-      1001, 52376514, 4908543, 10, 20, 0, null, null,
+      1000, 52376514, 4908543, 10, 20, 0, null, null, false,
+      1001, 52376514, 4908543, 10, 20, 0, null, null, false,
     ]);
   });
 
@@ -121,13 +121,13 @@ describe("createRequestRecorder", () => {
     for (let i = 0; i < 500; i++) recorder.record(event({ ts: i }));
     await recorder.flush(); // joins the in-flight auto-flush
     expect(pool.inserts()).toHaveLength(1);
-    expect(pool.inserts()[0].values).toHaveLength(500 * 8);
+    expect(pool.inserts()[0].values).toHaveLength(500 * 9);
 
     for (let i = 0; i < 700; i++) recorder.record(event({ ts: i }));
     await recorder.flush();
     const inserts = pool.inserts();
     expect(inserts.length).toBeGreaterThanOrEqual(2);
-    const totalRows = inserts.slice(1).reduce((n, c) => n + (c.values?.length ?? 0) / 8, 0);
+    const totalRows = inserts.slice(1).reduce((n, c) => n + (c.values?.length ?? 0) / 9, 0);
     expect(totalRows).toBe(700);
   });
 
@@ -170,7 +170,7 @@ describe("createRequestRecorder", () => {
     for (let i = 0; i < 10; i++) recorder.record(event({ ts: i }));
     expect(warn).toHaveBeenCalledTimes(2);
     await recorder.flush();
-    expect(pool.inserts()[0].values).toHaveLength(5 * 8); // only the first 5 survived
+    expect(pool.inserts()[0].values).toHaveLength(5 * 9); // only the first 5 survived
   });
 
   it("drops a batch on insert failure without retrying it", async () => {

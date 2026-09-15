@@ -18,6 +18,7 @@ import {
   BTREE_INDEX_DDL,
   BTREE_INDEX_VALIDITY_SQL,
   BTREE_INDEX_DROP_DDL,
+  ANON_BACKFILL_SQL,
   ensureSchema,
   ensureBtreeIndex,
 } from "../src/storage/schema.ts";
@@ -47,6 +48,27 @@ describe("schema DDL", () => {
     expect(SCHEMA_DDL).not.toMatch(/country[^\n]*DEFAULT/);
   });
 
+  it("adds the anon marker idempotently with a constant default (metadata-only ALTER)", () => {
+    expect(SCHEMA_DDL).toContain(
+      "ALTER TABLE mapcode_request ADD COLUMN IF NOT EXISTS anon boolean NOT NULL DEFAULT false"
+    );
+    expect(SCHEMA_DDL.indexOf("anon boolean")).toBeGreaterThan(SCHEMA_DDL.indexOf("country text"));
+  });
+
+  it("backfills pre-marker anonymised rows idempotently: geo kinds with lat NULL, never anything else", () => {
+    expect(ANON_BACKFILL_SQL).toContain("UPDATE mapcode_request SET anon = true");
+    expect(ANON_BACKFILL_SQL).toContain("lat IS NULL");
+    expect(ANON_BACKFILL_SQL).toContain("kind IN (10, 11, 12, 13, 20)");
+    expect(ANON_BACKFILL_SQL).toContain("NOT anon");
+    expect(ANON_BACKFILL_SQL).not.toMatch(/DELETE|TRUNCATE/);
+  });
+
+  it("ensureSchema runs the DDL, then the backfill", async () => {
+    const calls: string[] = [];
+    await ensureSchema(fakePool([], calls));
+    expect(calls).toEqual([SCHEMA_DDL, ANON_BACKFILL_SQL]);
+  });
+
   it("builds the ts btree concurrently and idempotently", () => {
     expect(BTREE_INDEX_DDL).toBe(
       "CREATE INDEX CONCURRENTLY IF NOT EXISTS mapcode_request_ts_btree ON mapcode_request (ts)"
@@ -58,7 +80,7 @@ describe("schema DDL", () => {
     const pool = fakePool([], calls);
     await ensureSchema(pool);
     await ensureBtreeIndex(pool);
-    expect(calls).toEqual([SCHEMA_DDL, BTREE_INDEX_VALIDITY_SQL, BTREE_INDEX_DDL]);
+    expect(calls).toEqual([SCHEMA_DDL, ANON_BACKFILL_SQL, BTREE_INDEX_VALIDITY_SQL, BTREE_INDEX_DDL]);
   });
 
   it("keeps a valid btree and does not drop it", async () => {

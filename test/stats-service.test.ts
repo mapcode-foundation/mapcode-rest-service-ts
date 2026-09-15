@@ -23,13 +23,14 @@ import {
 import type { StatsScanRow } from "../src/storage/stats-cache.ts";
 
 const NOW = 1_737_100_000;
+const ZERO = { "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 0 };
 // Two events 5 s ago: a real scan lists a recent event in every tier.
 const SCAN: StatsScanRow[] = [
-  { tier: "all", kind: 10, bucket: null, n: 100 },
-  { tier: "all", kind: 50, bucket: null, n: 3 },
-  { tier: "hour", kind: 10, bucket: Math.floor((NOW - 5) / 3600), n: 2 },
-  { tier: "min", kind: 10, bucket: Math.floor((NOW - 5) / 60), n: 2 },
-  { tier: "sec", kind: 10, bucket: NOW - 5, n: 2 },
+  { tier: "all", kind: 10, bucket: null, n: 100, anon: false },
+  { tier: "all", kind: 50, bucket: null, n: 3, anon: false },
+  { tier: "hour", kind: 10, bucket: Math.floor((NOW - 5) / 3600), n: 2, anon: false },
+  { tier: "min", kind: 10, bucket: Math.floor((NOW - 5) / 60), n: 2, anon: false },
+  { tier: "sec", kind: 10, bucket: NOW - 5, n: 2, anon: false },
 ];
 
 /** A scan the test resolves by hand, to interleave events with an in-flight scan. */
@@ -63,7 +64,7 @@ describe("createStatsService", () => {
     const service = createStatsService(async () => SCAN, { now: () => NOW });
     await service.recalc();
     expect(service.rows(NOW)).toEqual([
-      { kind: 10, "1m": 2, "1h": 2, "1d": 2, "7d": 2, "31d": 2, "1y": 2, all: 100 },
+      { kind: 10, "1m": 2, "1h": 2, "1d": 2, "7d": 2, "31d": 2, "1y": 2, all: 100, anon: ZERO },
     ]);
     expect(service.rowCount()).toBe(103);
     service.close();
@@ -72,10 +73,10 @@ describe("createStatsService", () => {
   it("counts persisted events incrementally", async () => {
     const service = createStatsService(async () => SCAN, { now: () => NOW });
     await service.recalc();
-    service.onPersisted([{ ts: NOW, kind: 10 }, { ts: NOW, kind: 20 }]);
+    service.onPersisted([{ ts: NOW, kind: 10, anon: false }, { ts: NOW, kind: 20, anon: false }]);
     const rows = service.rows(NOW);
     expect(rows.find((r) => r.kind === 10)?.all).toBe(101);
-    expect(rows.find((r) => r.kind === 20)).toEqual({ kind: 20, "1m": 1, "1h": 1, "1d": 1, "7d": 1, "31d": 1, "1y": 1, all: 1 });
+    expect(rows.find((r) => r.kind === 20)).toEqual({ kind: 20, "1m": 1, "1h": 1, "1d": 1, "7d": 1, "31d": 1, "1y": 1, all: 1, anon: ZERO });
     expect(service.rowCount()).toBe(105);
     service.close();
   });
@@ -87,10 +88,11 @@ describe("createStatsService", () => {
     resolve(SCAN);
     await first;
     const second = service.recalc();
-    service.onPersisted([{ ts: NOW, kind: 10 }]); // arrives while the scan runs
-    resolve([{ tier: "all", kind: 10, bucket: null, n: 500 }]); // snapshot taken before that event
+    service.onPersisted([{ ts: NOW, kind: 10, anon: false }, { ts: NOW, kind: 10, anon: true }]); // arrive while the scan runs
+    resolve([{ tier: "all", kind: 10, bucket: null, n: 500, anon: false }]); // snapshot taken before those events
     await second;
-    expect(service.rows(NOW)[0].all).toBe(501);
+    expect(service.rows(NOW)[0].all).toBe(502);
+    expect(service.rows(NOW)[0].anon.all).toBe(1); // the flag survives the journal replay
     service.close();
   });
 
@@ -199,7 +201,7 @@ describe("createStatsService", () => {
     await service.recalc();
     expect(service.storage()).toEqual({ databaseBytes: 8_000_000, tableBytes: 105_600_000, rowCount: 103 });
     sizes = { databaseBytes: 9_000_000, tableBytes: 110_000_000 };
-    service.onPersisted([{ ts: NOW, kind: 10 }]);
+    service.onPersisted([{ ts: NOW, kind: 10, anon: false }]);
     // Sizes are not re-queried per call: rowCount moved, the bytes did not.
     expect(service.storage()).toEqual({ databaseBytes: 8_000_000, tableBytes: 105_600_000, rowCount: 104 });
     expect(sizeCalls).toHaveLength(1);
@@ -229,7 +231,7 @@ describe("createStatsService", () => {
     });
     await service.recalc();
     fail = true;
-    service.onPersisted([{ ts: NOW, kind: 10 }]);
+    service.onPersisted([{ ts: NOW, kind: 10, anon: false }]);
     await service.recalc(); // must not reject
     expect(service.storage()).toEqual({ databaseBytes: 8_000_000, tableBytes: 105_600_000, rowCount: 104 });
     expect(warn).toHaveBeenCalledTimes(1);

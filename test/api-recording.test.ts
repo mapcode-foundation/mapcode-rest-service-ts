@@ -53,7 +53,7 @@ async function inject(url: string, method = "GET"): Promise<RecordedRequest> {
 describe("recorded kinds and coordinates", () => {
   it("records an encode call with request-path microdegree coords", async () => {
     const e = await inject("/mapcode/codes/52.376514,4.908543");
-    expect(e).toMatchObject({ kind: KIND.codes, lat: 52376514, lon: 4908543, status: 20, client: 0, mapcode: null, country: null });
+    expect(e).toMatchObject({ kind: KIND.codes, lat: 52376514, lon: 4908543, status: 20, client: 0, mapcode: null, country: null, anon: false });
     expect(Math.abs(e.ts - Math.floor(Date.now() / 1000))).toBeLessThanOrEqual(2);
   });
 
@@ -105,7 +105,7 @@ describe("recorded kinds and coordinates", () => {
 
   it("records non-geo endpoints with NULL coords", async () => {
     expect(await inject("/mapcode")).toMatchObject({ kind: KIND.help, lat: null, lon: null, status: 20 });
-    expect(await inject("/mapcode/territories")).toMatchObject({ kind: KIND.territories, lat: null });
+    expect(await inject("/mapcode/territories")).toMatchObject({ kind: KIND.territories, lat: null, anon: false });
     expect(await inject("/mapcode/territories/NLD")).toMatchObject({ kind: KIND.territory, lat: null });
     expect(await inject("/mapcode/alphabets")).toMatchObject({ kind: KIND.alphabets, lat: null });
     expect(await inject("/mapcode/alphabets/roman")).toMatchObject({ kind: KIND.alphabet, lat: null });
@@ -181,7 +181,7 @@ describe("allowLog", () => {
   it("records an anonymised row for false/0/no (case-insensitive): no coords, no mapcode, but the country", async () => {
     for (const v of ["false", "FALSE", "0", "no", "No"]) {
       const e = await inject(`/mapcode/codes/52.0,5.0?allowLog=${v}&client=demo`);
-      expect(e).toEqual({ ts: e.ts, kind: KIND.codes, lat: null, lon: null, status: 20, client: 5, mapcode: null, country: "NLD" });
+      expect(e).toEqual({ ts: e.ts, kind: KIND.codes, lat: null, lon: null, status: 20, client: 5, mapcode: null, country: "NLD", anon: true });
       expect(Math.abs(e.ts - Math.floor(Date.now() / 1000))).toBeLessThanOrEqual(2);
     }
   });
@@ -199,13 +199,15 @@ describe("allowLog", () => {
     const res = await app.inject({ method: "GET", url: "/mapcode/codes/52.0,5.0/international" });
     const code = encodeURIComponent((res.json() as { mapcode: string }).mapcode);
     const e = await inject(`/mapcode/coords/${code}?allowLog=false`);
-    expect(e).toMatchObject({ kind: KIND.coords, lat: null, lon: null, mapcode: null, country: "NLD" });
+    expect(e).toMatchObject({ kind: KIND.coords, lat: null, lon: null, mapcode: null, country: "NLD", anon: true });
   });
 
-  it("records NULL country for sea points and non-geo endpoints", async () => {
-    expect(await inject("/mapcode/codes/0,0?allowLog=false")).toMatchObject({ kind: KIND.codes, lat: null, country: null });
-    expect(await inject("/mapcode/territories?allowLog=false")).toMatchObject({ kind: KIND.territories, lat: null, country: null });
-    expect(await inject("/mapcode/alphabets/roman?allowLog=no")).toMatchObject({ kind: KIND.alphabet, country: null });
+  it("records NULL country for sea points and non-geo endpoints, still marked anon", async () => {
+    // The anon marker is what makes these countable: without it they are
+    // indistinguishable from fully recorded non-geo rows.
+    expect(await inject("/mapcode/codes/0,0?allowLog=false")).toMatchObject({ kind: KIND.codes, lat: null, country: null, anon: true });
+    expect(await inject("/mapcode/territories?allowLog=false")).toMatchObject({ kind: KIND.territories, lat: null, country: null, anon: true });
+    expect(await inject("/mapcode/alphabets/roman?allowLog=no")).toMatchObject({ kind: KIND.alphabet, country: null, anon: true });
   });
 
   it("still skips failed calls and monitoring noise when allowLog is false", async () => {
@@ -215,9 +217,9 @@ describe("allowLog", () => {
     expect(events).toHaveLength(0);
   });
 
-  it("records the full row (country NULL) for absent, true, or garbage values", async () => {
-    expect(await inject("/mapcode/codes/52.0,5.0?allowLog=true")).toMatchObject({ lat: 52000000, lon: 5000000, country: null });
-    expect(await inject("/mapcode/codes/52.0,5.0?allowLog=banana")).toMatchObject({ lat: 52000000, country: null });
+  it("records the full row (country NULL, anon false) for absent, true, or garbage values", async () => {
+    expect(await inject("/mapcode/codes/52.0,5.0?allowLog=true")).toMatchObject({ lat: 52000000, lon: 5000000, country: null, anon: false });
+    expect(await inject("/mapcode/codes/52.0,5.0?allowLog=banana")).toMatchObject({ lat: 52000000, country: null, anon: false });
     events.length = 0;
     await app.inject({ method: "GET", url: "/mapcode/territories?allowLog=true" });
     await app.inject({ method: "GET", url: "/mapcode/territories?allowLog=banana" });

@@ -48,44 +48,65 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
 
   it("round-trips recorder inserts into the replay query", async () => {
     const recorder = createRequestRecorder(pool);
-    recorder.record({ ts: 1000, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 1, mapcode: null, country: null });
-    recorder.record({ ts: 1001, kind: 20, lat: 48858370, lon: 2294481, status: 20, client: 0, mapcode: "NLD 49.4V", country: null });
-    recorder.record({ ts: 1002, kind: 1, lat: null, lon: null, status: 20, client: 0, mapcode: null, country: null }); // non-geo
+    recorder.record({ ts: 1000, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 1, mapcode: null, country: null, anon: false });
+    recorder.record({ ts: 1001, kind: 20, lat: 48858370, lon: 2294481, status: 20, client: 0, mapcode: "NLD 49.4V", country: null, anon: false });
+    recorder.record({ ts: 1002, kind: 1, lat: null, lon: null, status: 20, client: 0, mapcode: null, country: null, anon: false }); // non-geo
     await recorder.close();
 
     const cols = await queryReplay(pool, { from: 1000, to: 2000, limit: 10, kinds: null });
-    expect(cols.ts).toEqual([1000, 1001]); // the non-geo row is filtered by lat IS NOT NULL
+    expect(cols.ts).toEqual([1000, 1001]); // the full non-geo row is filtered out (lat NULL, not anon)
     expect(cols.kind).toEqual([10, 20]);
     expect(cols.lat).toEqual([52376514, 48858370]);
     expect(cols.status).toEqual([20, 20]); // "char" round-trips back to int
     expect(cols.client).toEqual([1, 0]);
     expect(cols.mapcode).toEqual([null, "NLD 49.4V"]);
+    expect(cols.country).toEqual([null, null]);
+    expect(cols.anon).toEqual([0, 0]); // boolean round-trips to 0/1
   });
 
-  it("stores anonymised rows with a country and keeps them out of the replay map", async () => {
+  it("stores anonymised rows with a country and anon, and returns them from replay without coords", async () => {
     const recorder = createRequestRecorder(pool);
-    recorder.record({ ts: 1003, kind: 10, lat: null, lon: null, status: 20, client: 5, mapcode: null, country: "NLD" });
+    recorder.record({ ts: 1003, kind: 10, lat: null, lon: null, status: 20, client: 5, mapcode: null, country: "NLD", anon: true });
+    recorder.record({ ts: 1004, kind: 30, lat: null, lon: null, status: 20, client: 5, mapcode: null, country: null, anon: true });
     await recorder.close();
 
-    const res = await pool.query("SELECT kind, client::int AS client, country FROM mapcode_request WHERE ts = 1003");
-    expect(res.rows).toEqual([{ kind: 10, client: 5, country: "NLD" }]);
+    const res = await pool.query("SELECT kind, client::int AS client, country, anon FROM mapcode_request WHERE ts = 1003");
+    expect(res.rows).toEqual([{ kind: 10, client: 5, country: "NLD", anon: true }]);
     const geo = await pool.query("SELECT count(*)::int AS n FROM mapcode_request WHERE country IS NULL");
-    expect(geo.rows[0].n).toBe(3);
+    expect(geo.rows[0].n).toBe(4);
     const cols = await queryReplay(pool, { from: 1000, to: 2000, limit: 10, kinds: null });
-    expect(cols.ts).toEqual([1000, 1001]);
+    // Anonymised rows (geo and non-geo) appear; the full non-geo row at ts=1002 still does not.
+    expect(cols.ts).toEqual([1000, 1001, 1003, 1004]);
+    expect(cols.lat).toEqual([52376514, 48858370, null, null]);
+    expect(cols.country).toEqual([null, null, "NLD", null]);
+    expect(cols.anon).toEqual([0, 0, 1, 1]);
   });
 
-  it("filters by kind", async () => {
+  it("backfills pre-marker anonymised rows on bootstrap, leaving full non-geo rows alone", async () => {
+    // Simulate a row written between the country column and the anon marker:
+    // a geo kind without a point, anon still at its default.
+    await pool.query("INSERT INTO mapcode_request (ts,lat,lon,kind,status,client,mapcode,country) VALUES (1005,NULL,NULL,20,20::int::\"char\",0::int::\"char\",NULL,'FRA')");
+    await ensureSchema(pool);
+    const res = await pool.query("SELECT ts, anon FROM mapcode_request WHERE ts IN (1002, 1005) ORDER BY ts");
+    expect(res.rows).toEqual([
+      { ts: 1002, anon: false }, // full non-geo row (kind 1) is not a geo kind: untouched
+      { ts: 1005, anon: true },
+    ]);
+  });
+
+  it("filters by kind, anonymised rows included", async () => {
     const cols = await queryReplay(pool, { from: 1000, to: 2000, limit: 10, kinds: [20] });
-    expect(cols.kind).toEqual([20]);
+    expect(cols.ts).toEqual([1001, 1005]); // the full decode and the backfilled anonymised one
+    expect(cols.kind).toEqual([20, 20]);
+    expect(cols.anon).toEqual([0, 1]);
   });
 
   it("rebuilds the stats cache from the tiered scan, non-geo rows included, replay rows in rowCount only", async () => {
     const now = Math.floor(Date.now() / 1000);
     const recorder = createRequestRecorder(pool);
-    recorder.record({ ts: now, kind: 10, lat: null, lon: null, status: 20, client: 0, mapcode: null, country: null });
-    recorder.record({ ts: now - 7200, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 1, mapcode: null, country: null });
-    recorder.record({ ts: now, kind: 50, lat: null, lon: null, status: 20, client: 0, mapcode: null, country: null }); // historical replay row
+    recorder.record({ ts: now, kind: 10, lat: null, lon: null, status: 20, client: 0, mapcode: null, country: null, anon: false });
+    recorder.record({ ts: now - 7200, kind: 10, lat: 52376514, lon: 4908543, status: 20, client: 1, mapcode: null, country: null, anon: false });
+    recorder.record({ ts: now, kind: 50, lat: null, lon: null, status: 20, client: 0, mapcode: null, country: null, anon: false }); // historical replay row
     await recorder.close();
 
     const snap = StatsCache.fromScan(await scanStats(pool, now)).snapshot(now);
@@ -93,10 +114,13 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
     expect(total("1m")).toBe(1);
     expect(total("1h")).toBe(1);
     expect(total("1d")).toBe(2);
-    expect(total("all")).toBe(6); // 3 replay round-trip rows + 1 anonymised row + these 2; the kind-50 row is excluded
+    expect(total("all")).toBe(8); // 3 replay round-trip rows + 3 anonymised rows + these 2; the kind-50 row is excluded
     expect(snap.rows.find((r) => r.kind === 10)?.all).toBe(4); // ts=1000 round-trip row + ts=1003 anonymised row + these 2
+    expect(snap.rows.find((r) => r.kind === 10)?.anon.all).toBe(1); // only the ts=1003 row
+    expect(snap.rows.find((r) => r.kind === 20)?.anon.all).toBe(1); // the backfilled ts=1005 row
+    expect(snap.rows.find((r) => r.kind === 30)?.anon.all).toBe(1); // the non-geo anonymised ts=1004 row
     expect(snap.rows.some((r) => r.kind === 50)).toBe(false);
-    expect(snap.rowCount).toBe(7); // all rows, the kind-50 one included
+    expect(snap.rowCount).toBe(9); // all rows, the kind-50 one included
   });
 
   it("measures storage sizes without a row count", async () => {
@@ -112,7 +136,7 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
     try {
       await client.query("SET enable_seqscan = off");
       const res = await client.query(
-        "EXPLAIN (FORMAT JSON) SELECT ts FROM mapcode_request WHERE ts >= 1000 AND ts < 2000 AND lat IS NOT NULL ORDER BY ts LIMIT 10"
+        "EXPLAIN (FORMAT JSON) SELECT ts FROM mapcode_request WHERE ts >= 1000 AND ts < 2000 AND (lat IS NOT NULL OR anon) ORDER BY ts LIMIT 10"
       );
       expect(JSON.stringify(res.rows[0])).toContain("mapcode_request_ts_btree");
     } finally {
