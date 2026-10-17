@@ -38,6 +38,9 @@ describe("Accept negotiation", () => {
     ["application/json;q=0, */*", "xml"],
     ["application/json;q=0, application/xml;q=0", "json"],
     ["text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "xml"],
+    ["application/json;q=-1", "json"],
+    ["application/json;q=-1, application/xml;q=0", "json"],
+    ["application/json, application/xml;q=2", "json"],
   ])("Accept: %s → %s", async (accept, expected) => {
     const res = await app.inject({ method: "GET", url: "/mapcode/version", headers: { accept } });
     expect(res.statusCode).toBe(200);
