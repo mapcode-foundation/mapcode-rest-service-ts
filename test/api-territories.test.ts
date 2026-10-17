@@ -279,6 +279,14 @@ describe("checkTerritoryStateJson", () => {
     );
   });
 
+  it("GET /mapcode/territories/ZZZZ?context=XXXX → 400 blaming 'parent' before 'territory'", async () => {
+    const res = await getJson("/mapcode/territories/ZZZZ?context=XXXX");
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toBe(
+      `{"message":"Invalid format for 'parent': 'XXXX', expected: valid territory code (e.g. NLD, US-CA)","status":400}`
+    );
+  });
+
   it("GET /mapcode/territories/in?context=nld → 400 still blaming 'territory'", async () => {
     const res = await getJson("/mapcode/territories/in?context=nld");
     expect(res.statusCode).toBe(400);
