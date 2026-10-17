@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { AlphaCodeFormat } from "mapcode-ts";
-import type { MapcodeService, Territory } from "../domain/mapcode-service.ts";
+import { API_ERROR_VALID_TERRITORY_CODES, type MapcodeService, type Territory } from "../domain/mapcode-service.ts";
 import type { Schema } from "../serialization/types.ts";
 import {
   buildTerritory,
@@ -22,7 +22,7 @@ import {
   territoriesSchema,
   buildAlphabet,
 } from "../dto/index.ts";
-import { ApiInvalidFormatError, ApiIntegerOutOfRangeError } from "../errors.ts";
+import { ApiError, ApiInvalidFormatError, ApiIntegerOutOfRangeError } from "../errors.ts";
 import { parseIntStrict, INTEGER_MAX } from "./params.ts";
 
 // ---------------------------------------------------------------------------
@@ -116,12 +116,9 @@ export function handleGetTerritory(
   let resolved: Territory;
   try {
     resolved = mapcodeService.resolveTerritory(territoryParam, contextRaw);
-  } catch {
-    throw new ApiInvalidFormatError(
-      "territory",
-      territoryParam,
-      "valid territory code (e.g. NLD, US-CA)"
-    );
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
+    throw new ApiInvalidFormatError("territory", territoryParam, API_ERROR_VALID_TERRITORY_CODES);
   }
 
   const dto = buildTerritoryDTO(resolved);
