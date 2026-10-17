@@ -42,7 +42,7 @@ Point the service at it with the **`MAPCODE_BORDERS_PATH`** environment
 variable (required — the service refuses to start without it):
 
 ```bash
-MAPCODE_BORDERS_PATH=./data//borders.fgb
+MAPCODE_BORDERS_PATH=./data/borders.fgb
 ```
 
 The production `borders.fgb` (~22 MB) is produced by the Java repository's
@@ -100,10 +100,10 @@ Run the built server:
 
 ```bash
 npm run build
-MAPCODE_BORDERS_PATH=./data//borders.fgb node dist/index.js
-# → mapcode-rest-service-ts listening on :8080 (version 2.4.19.3)
+MAPCODE_BORDERS_PATH=./data/borders.fgb node dist/index.js
+# → mapcode-rest-service-ts listening on :8080 (version <package.json version>)
 curl localhost:8080/mapcode/version
-# {"version":"2.4.19.3"}
+# {"version":"<package.json version>"}
 ```
 
 ## API
@@ -305,12 +305,14 @@ historical meta-traffic rows, so it can exceed
 src/
   index.ts            entrypoint: load config → BoundaryService.load → buildServer → listen
   config.ts           env-based configuration
+  errors.ts           ApiError hierarchy (HTTP status + message)
   server.ts           Fastify app: error/404/405 handlers, route registration
   routes/             HTTP layer (content negotiation, /xml//json/ aliases)
   resources/          framework-agnostic handler logic (ports of *ResourceImpl)
   domain/             MapcodeService (wraps mapcode-ts), BoundaryService, geo helpers
   dto/                DTO build* factories + serialization Schemas
   serialization/      JSON/XML serializers (byte-parity with Jackson/JAXB), formatDouble
+  storage/            Postgres: pool, schema, request recorder, replay and stats queries
 test/                 vitest suite (per-endpoint ports + parity sweep)
 ```
 
