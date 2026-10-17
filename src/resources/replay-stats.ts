@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { ApiError } from "../errors.ts";
+import { ApiError, loggableCause } from "../errors.ts";
 import { StatsNotReadyError } from "../storage/stats-service.ts";
 import {
   STATS_WINDOWS,
@@ -60,7 +60,7 @@ export async function handleReplayStats(
     if (err instanceof StatsNotReadyError) throw new ApiError(503, "Service Unavailable");
     // Raw pg error text (hostnames, usernames, ...) never reaches the response
     // body; as the cause, it reaches only the log.
-    throw new ApiError(500, "Internal Server Error", { cause: err });
+    throw new ApiError(500, "Internal Server Error", { cause: loggableCause(err) });
   }
   const sum = (pick: (row: StatsKindCounts) => StatsCounts): StatsCounts => {
     const acc: StatsCounts = { "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 0 };

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { ApiError, ApiInvalidFormatError, ApiIntegerOutOfRangeError } from "../errors.ts";
+import { ApiError, ApiInvalidFormatError, ApiIntegerOutOfRangeError, loggableCause } from "../errors.ts";
 import { parseIntStrict } from "./params.ts";
 import type { ReplayQueryFn } from "../storage/replay-query.ts";
 
@@ -101,7 +101,7 @@ export async function handleReplay(
   } catch (err) {
     // Raw pg error text (hostnames, usernames, ...) never reaches the response
     // body; as the cause, it reaches only the log.
-    throw new ApiError(500, "Internal Server Error", { cause: err });
+    throw new ApiError(500, "Internal Server Error", { cause: loggableCause(err) });
   }
   const count = columns.ts.length;
   const dto: Record<string, unknown> = { from, to, count, truncated: count >= limit, ...columns };

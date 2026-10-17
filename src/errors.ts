@@ -21,6 +21,14 @@ export class ApiError extends Error {
   }
 }
 
+// Connecting to a host with several addresses ("localhost" is ::1 and
+// 127.0.0.1) fails with an AggregateError whose message is empty, which would
+// leave the logged cause blank, so name each address's failure instead.
+export function loggableCause(err: unknown): unknown {
+  if (!(err instanceof AggregateError) || err.message !== "") return err;
+  return new Error(err.errors.map((inner) => (inner instanceof Error ? inner.message : String(inner))).join("; "));
+}
+
 export class ApiInvalidFormatError extends ApiError {
   constructor(field: string, value: unknown, expected: string) {
     super(400, `Invalid format for '${field}': '${String(value)}', expected: ${expected}`);
