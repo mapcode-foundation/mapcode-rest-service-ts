@@ -211,6 +211,30 @@ describe("server logging", () => {
       expect.stringContaining("connect ECONNREFUSED 10.0.0.1:5432"),
     ]);
   });
+
+  it("logs which addresses refused when every address of the database host refuses", async () => {
+    const refused = Object.assign(
+      new AggregateError([
+        new Error("connect ECONNREFUSED ::1:5432"),
+        new Error("connect ECONNREFUSED 127.0.0.1:5432"),
+      ], ""),
+      { code: "ECONNREFUSED" },
+    );
+    const { app, logs } = buildLoggedServer({
+      ...failingReplay(),
+      query: async () => {
+        throw refused;
+      },
+    });
+
+    const res = await app.inject({ method: "GET", url: "/mapcode/replay?from=1000&to=2000", headers: AUTH });
+
+    expect(res.statusCode).toBe(500);
+    expect(JSON.parse(res.body)).toEqual({ message: "Internal Server Error", status: 500 });
+    const failure = logs.find((log) => log.statusCode === 500);
+    expect(failure?.err?.message).toContain("ECONNREFUSED ::1:5432");
+    expect(failure?.err?.message).toContain("ECONNREFUSED 127.0.0.1:5432");
+  });
 });
 
 const AUTH = { authorization: "Bearer test-token" };
