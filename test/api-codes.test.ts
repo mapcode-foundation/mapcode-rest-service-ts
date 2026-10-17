@@ -290,7 +290,6 @@ describe("checkCodesIncludeXml", () => {
 });
 
 describe("checkCodesSubMillimeterOffset", () => {
-  // Expected bytes come from the original WAR's Jackson and JAXB on Temurin 17.
   const url = "/mapcode/codes/52.4625727,4.8936337/international?precision=8&include=offset";
   it("json writes Java's 3.0E-6, not 0.000003", async () => {
     const res = await getJson(url);

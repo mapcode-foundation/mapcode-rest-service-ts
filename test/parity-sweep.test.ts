@@ -19,8 +19,8 @@
 // GET /mapcode/codes/{lat},{lon}/... asserting INTERNAL CONSISTENCY: the
 // `international` mapcode the endpoint returns (code / territory / offsetMeters,
 // as serialized) must equal what we recompute INDEPENDENTLY by calling
-// mapcode-ts directly (encodeToInternational + decode) with Java's lon
-// wrapping (JAVA_MAP_TO_LON) and the same offset rounding (Math.round(d*1e6)/1e6).
+// mapcode-ts directly (encodeToInternational + decode) with the same offset
+// rounding (Math.round(d*1e6)/1e6).
 // offsetMeters is compared as a RAW number (not via formatDouble on both sides,
 // which would mask a consistently-broken formatter).
 //
@@ -105,7 +105,6 @@ function expectedInternational(
 }
 
 const LATS = [-90, -45, 0, 52.376514, 90];
-// speedtools Geo.mapToLon(lon) for each swept lon, as printed by Temurin 17.
 const JAVA_MAP_TO_LON = new Map([
   [-180, -180.0],
   [-1, -1.0],

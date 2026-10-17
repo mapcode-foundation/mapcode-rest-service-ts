@@ -38,9 +38,7 @@ describe("formatDouble (Java Double.toString parity)", () => {
     expect(formatDouble(-0)).toBe("-0.0");
   });
 
-  // Double.toString output, identical on Temurin 17.0.20.1 (the original
-  // service's runtime) and OpenJDK 27, and byte-equal to what the WAR's
-  // Jackson 2.21.3 and JAXB 2.3.3 write for MapcodeDTO.offsetMeters.
+  // Double.toString on Temurin 17, the original service's runtime.
   const JAVA_DOUBLE_TO_STRING = [
     "2.0E-6", "7.3E-5", "1.23E-4", "-1.23E-4", "9.99E-4", "9.99999E-4",
     "1.0E-6", "1.0E-7", "1.234567E-5", "5.0E-10",

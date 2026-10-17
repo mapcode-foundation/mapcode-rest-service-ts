@@ -16,7 +16,6 @@ import { describe, it, expect } from "vitest";
 import { mapToLon, distanceInMeters } from "../src/domain/geo.ts";
 
 describe("mapToLon", () => {
-  // [input, speedtools Geo.mapToLon(input)] as printed by Temurin 17.
   const JAVA_MAP_TO_LON: [string, string][] = [
     ["0.0", "0.0"],
     ["-0.0", "0.0"],
@@ -49,8 +48,6 @@ describe("distanceInMeters", () => {
     expect(d).toBeGreaterThan(2);
     expect(d).toBeLessThan(3.5);
   });
-  // Geo.distanceInMeters(new GeoPoint(lat1, lon1), new GeoPoint(lat2, lon2)) on Temurin 17;
-  // GeoPoint runs each lon through Geo.mapToLon.
   const JAVA_DISTANCE: [number, number, number, number, number][] = [
     [22.750544, 1.7865850000000023, 22.750536, 1.7865945, 1.3186755002198305],
     [41.487191, 53.72135300000002, 41.487191, 53.7213565, 0.2918645011238646],
