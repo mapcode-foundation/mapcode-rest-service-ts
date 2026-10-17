@@ -18,6 +18,7 @@ import { describe, it, expect, vi } from "vitest";
 import { createPool, poolConfig, API_POOL_TUNING, MAINTENANCE_POOL_TUNING } from "../src/storage/pool.ts";
 
 const AUTH_OK_READY = Buffer.from([0x52, 0, 0, 0, 8, 0, 0, 0, 0, 0x5a, 0, 0, 0, 5, 0x49]);
+const TERMINATE = 0x58;
 const SELECT_DONE_READY = Buffer.concat([
   Buffer.from([0x43, 0, 0, 0, 13]),
   Buffer.from("SELECT 0\0"),
@@ -30,7 +31,8 @@ async function fakePostgres(): Promise<{ port: number; dropConnections: () => vo
     sockets.add(socket);
     socket.on("close", () => sockets.delete(socket));
     let started = false;
-    socket.on("data", () => {
+    socket.on("data", (d) => {
+      if (d[0] === TERMINATE) return;
       socket.write(started ? SELECT_DONE_READY : AUTH_OK_READY);
       started = true;
     });
