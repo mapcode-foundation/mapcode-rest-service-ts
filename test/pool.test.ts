@@ -12,8 +12,61 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { describe, it, expect } from "vitest";
-import { poolConfig, API_POOL_TUNING, MAINTENANCE_POOL_TUNING } from "../src/storage/pool.ts";
+import net from "node:net";
+import { inspect } from "node:util";
+import { describe, it, expect, vi } from "vitest";
+import { createPool, poolConfig, API_POOL_TUNING, MAINTENANCE_POOL_TUNING } from "../src/storage/pool.ts";
+
+const AUTH_OK_READY = Buffer.from([0x52, 0, 0, 0, 8, 0, 0, 0, 0, 0x5a, 0, 0, 0, 5, 0x49]);
+const SELECT_DONE_READY = Buffer.concat([
+  Buffer.from([0x43, 0, 0, 0, 13]),
+  Buffer.from("SELECT 0\0"),
+  Buffer.from([0x5a, 0, 0, 0, 5, 0x49]),
+]);
+
+/** A minimal Postgres wire stand-in: accepts any login, answers every query with zero rows. */
+async function fakePostgres(): Promise<{ port: number; dropConnections: () => void; close: () => Promise<void> }> {
+  const sockets = new Set<net.Socket>();
+  const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.on("close", () => sockets.delete(socket));
+    let started = false;
+    socket.on("data", () => {
+      socket.write(started ? SELECT_DONE_READY : AUTH_OK_READY);
+      started = true;
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  return {
+    port: (server.address() as net.AddressInfo).port,
+    dropConnections: () => sockets.forEach((s) => s.destroy()),
+    close: () => new Promise((resolve) => server.close(() => resolve())),
+  };
+}
+
+describe("createPool", () => {
+  it("survives an idle client losing its connection and warns without the connection string", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const db = await fakePostgres();
+    const pool = createPool({ dbUrl: `postgres://u:secretpw@127.0.0.1:${db.port}/db`, dbCaCert: null })!;
+    try {
+      (await pool.connect()).release();
+      db.dropConnections();
+
+      await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+      const warnings = warn.mock.calls.map((args) => inspect(args, { depth: 10 })).join("\n");
+      expect(warnings).toContain("Connection terminated unexpectedly");
+      expect(warnings).not.toContain("secretpw");
+      expect(warnings).not.toContain(String(db.port));
+
+      await expect(pool.query("SELECT 1")).resolves.toMatchObject({ rows: [] });
+    } finally {
+      warn.mockRestore();
+      await pool.end();
+      await db.close();
+    }
+  });
+});
 
 describe("poolConfig", () => {
   it("returns null when dbUrl is null", () => {
