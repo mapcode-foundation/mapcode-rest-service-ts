@@ -44,7 +44,7 @@ function preferredFormat(acceptHeader?: string): OutputFormat {
       const [rawName, rawValue] = param.split("=");
       if (rawName.trim().toLowerCase() === "q") {
         const parsed = Number(rawValue);
-        q = Number.isFinite(parsed) ? parsed : 0;
+        q = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 1) : 0;
       }
     }
     for (const [weight, mediaType] of [
