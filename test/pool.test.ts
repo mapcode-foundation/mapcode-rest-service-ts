@@ -24,7 +24,6 @@ const SELECT_DONE_READY = Buffer.concat([
   Buffer.from([0x5a, 0, 0, 0, 5, 0x49]),
 ]);
 
-/** A minimal Postgres wire stand-in: accepts any login, answers every query with zero rows. */
 async function fakePostgres(): Promise<{ port: number; dropConnections: () => void; close: () => Promise<void> }> {
   const sockets = new Set<net.Socket>();
   const server = net.createServer((socket) => {

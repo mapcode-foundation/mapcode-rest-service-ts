@@ -59,5 +59,11 @@ export function poolConfig(
 /** Create a pg pool, or null when no database is configured. */
 export function createPool(config: Pick<Config, "dbUrl" | "dbCaCert">, tuning: PoolTuning = API_POOL_TUNING): Pool | null {
   const options = poolConfig(config, tuning);
-  return options === null ? null : new Pool(options);
+  if (options === null) return null;
+  const pool = new Pool(options);
+  // pg-pool re-emits an idle client's connection error on the pool, and an unhandled
+  // 'error' event exits the process. The error carries err.client with its
+  // connection details, so only the message is logged.
+  pool.on("error", (err) => console.warn(`database pool: idle connection lost: ${err.message}`));
+  return pool;
 }
