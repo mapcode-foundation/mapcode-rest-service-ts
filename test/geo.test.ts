@@ -49,4 +49,13 @@ describe("distanceInMeters", () => {
     expect(d).toBeGreaterThan(2);
     expect(d).toBeLessThan(3.5);
   });
+  // Geo.distanceInMeters(new GeoPoint(lat1, lon1), new GeoPoint(lat2, lon2)) on Temurin 17;
+  // GeoPoint runs each lon through Geo.mapToLon.
+  const JAVA_DISTANCE: [number, number, number, number, number][] = [
+    [22.750544, 1.7865850000000023, 22.750536, 1.7865945, 1.3186755002198305],
+    [41.487191, 53.72135300000002, 41.487191, 53.7213565, 0.2918645011238646],
+  ];
+  it.each(JAVA_DISTANCE)("matches Java for (%s, %s) to (%s, %s)", (lat1, lon1, lat2, lon2, java) => {
+    expect(distanceInMeters(lat1, lon1, lat2, lon2)).toBe(java);
+  });
 });
