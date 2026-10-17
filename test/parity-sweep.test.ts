@@ -19,8 +19,8 @@
 // GET /mapcode/codes/{lat},{lon}/... asserting INTERNAL CONSISTENCY: the
 // `international` mapcode the endpoint returns (code / territory / offsetMeters,
 // as serialized) must equal what we recompute INDEPENDENTLY by calling
-// mapcode-ts directly (encodeToInternational + decode) with the same lon
-// wrapping (mapToLon) and the same offset rounding (Math.round(d*1e6)/1e6).
+// mapcode-ts directly (encodeToInternational + decode) with Java's lon
+// wrapping (JAVA_MAP_TO_LON) and the same offset rounding (Math.round(d*1e6)/1e6).
 // offsetMeters is compared as a RAW number (not via formatDouble on both sides,
 // which would mask a consistently-broken formatter).
 //
@@ -35,7 +35,7 @@ import { buildServer } from "../src/server.ts";
 import { createMapcodeService } from "../src/domain/mapcode-service.ts";
 import { BoundaryService } from "../src/domain/boundary-service.ts";
 import { Alphabet, encodeToInternational, decode } from "mapcode-ts";
-import { mapToLon, distanceInMeters } from "../src/domain/geo.ts";
+import { distanceInMeters } from "../src/domain/geo.ts";
 
 let app: FastifyInstance;
 
@@ -63,7 +63,7 @@ function expectedInternational(
   includeTerritory: boolean,
   includeAlphabet: boolean
 ): { mapcode: string; mapcodeInAlphabet?: string; territory?: string; territoryInAlphabet?: string; offsetMeters?: number } {
-  const lonDeg = mapToLon(lonRaw);
+  const lonDeg = JAVA_MAP_TO_LON.get(lonRaw)!;
   const mc = encodeToInternational(lat, lonDeg);
   const code = mc.getCode(precision);
   const codeInAlphabet = mc.getCode(precision, alphabet);
@@ -105,7 +105,15 @@ function expectedInternational(
 }
 
 const LATS = [-90, -45, 0, 52.376514, 90];
-const LONS = [-180, -1, 4.908542, 180, 181];
+// speedtools Geo.mapToLon(lon) for each swept lon, as printed by Temurin 17.
+const JAVA_MAP_TO_LON = new Map([
+  [-180, -180.0],
+  [-1, -1.0],
+  [4.908542, 4.908542000000011],
+  [180, -180.0],
+  [181, -179.0],
+]);
+const LONS = [...JAVA_MAP_TO_LON.keys()];
 const PRECISIONS = [0, 2, 8];
 
 interface IncludeCombo {
