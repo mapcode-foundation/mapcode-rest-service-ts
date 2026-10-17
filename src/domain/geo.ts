@@ -33,9 +33,12 @@ export function mapToLon(lonDeg: number): number {
 
 /**
  * Distance in meters between two lat/lon points using the equirectangular (flat-earth)
- * approximation from speedtools Geo.distanceInMeters. Elevation is assumed 0.
+ * approximation from speedtools Geo.distanceInMeters. Elevation is assumed 0. Both longitudes
+ * go through mapToLon first, as the speedtools GeoPoint constructor does.
  */
-export function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+export function distanceInMeters(lat1: number, rawLon1: number, lat2: number, rawLon2: number): number {
+  const lon1 = mapToLon(rawLon1);
+  const lon2 = mapToLon(rawLon2);
   const wrappedOnLongSide = lon1 > lon2;
   let deltaLonDegrees = wrappedOnLongSide ? 360.0 - (lon1 - lon2) : lon2 - lon1;
   if (deltaLonDegrees > 180.0) {
