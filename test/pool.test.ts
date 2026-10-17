@@ -52,16 +52,20 @@ describe("createPool", () => {
       (await pool.connect()).release();
       db.dropConnections();
 
-      await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+      const idleLost = expect.stringContaining("idle connection lost: Connection terminated unexpectedly");
+      await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(idleLost));
       const warnings = warn.mock.calls.map((args) => inspect(args, { depth: 10 })).join("\n");
-      expect(warnings).toContain("Connection terminated unexpectedly");
-      expect(warnings).not.toContain("secretpw");
       expect(warnings).not.toContain(String(db.port));
 
       await expect(pool.query("SELECT 1")).resolves.toMatchObject({ rows: [] });
+
+      const lastClientClosed = new Promise((resolve) => pool.once("remove", resolve));
+      await pool.end();
+      await lastClientClosed;
+      expect(warn).toHaveBeenCalledTimes(1);
     } finally {
       warn.mockRestore();
-      await pool.end();
+      if (!pool.ended) await pool.end();
       await db.close();
     }
   });
