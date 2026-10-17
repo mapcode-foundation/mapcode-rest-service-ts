@@ -14,7 +14,7 @@
 
 import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import type { FastifyInstance } from "fastify";
-import { buildServer } from "../src/server.ts";
+import { buildServer, type ServerDeps } from "../src/server.ts";
 import { createMapcodeService, type MapcodeService } from "../src/domain/mapcode-service.ts";
 import { BoundaryService } from "../src/domain/boundary-service.ts";
 
@@ -50,7 +50,7 @@ afterEach(async () => {
   openApps = [];
 });
 
-function buildLoggedServer(): { app: FastifyInstance; logs: LogRecord[] } {
+function buildLoggedServer(replay?: ServerDeps["replay"]): { app: FastifyInstance; logs: LogRecord[] } {
   const logs: LogRecord[] = [];
   let buffered = "";
   const stream = {
@@ -71,6 +71,7 @@ function buildLoggedServer(): { app: FastifyInstance; logs: LogRecord[] } {
     boundaryService,
     version: "1.0",
     logger: { level: "info", stream },
+    replay,
   });
   openApps.push(app);
   return { app, logs };
@@ -155,6 +156,7 @@ describe("server logging", () => {
     const res = await app.inject({ method: "GET", url: "/boom" });
 
     expect(res.statusCode).toBe(500);
+    expect(JSON.parse(res.body)).toEqual({ message: "Internal Server Error", status: 500 });
     expect(logs).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -168,4 +170,60 @@ describe("server logging", () => {
       ])
     );
   });
+
+  it("keeps a framework 4xx status with a generic body and CORS, logged at warn", async () => {
+    const { app, logs } = buildLoggedServer(failingReplay());
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/mapcode/replay/stats",
+      headers: { "content-encoding": "foo" },
+    });
+
+    expect(res.statusCode).toBe(415);
+    expect(JSON.parse(res.body)).toEqual({ message: "Unsupported Media Type", status: 415 });
+    expect(res.headers["access-control-allow-origin"]).toBe("*");
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: 40,
+          url: "/mapcode/replay/stats",
+          statusCode: 415,
+          err: expect.objectContaining({ message: "Unsupported Content-Encoding: foo" }),
+        }),
+      ])
+    );
+  });
+
+  it("logs the database cause of a replay or stats failure, not in the body", async () => {
+    const { app, logs } = buildLoggedServer(failingReplay());
+
+    const replay = await app.inject({ method: "GET", url: "/mapcode/replay?from=1000&to=2000", headers: AUTH });
+    const stats = await app.inject({ method: "GET", url: "/mapcode/replay/stats", headers: AUTH });
+
+    for (const res of [replay, stats]) {
+      expect(res.statusCode).toBe(500);
+      expect(JSON.parse(res.body)).toEqual({ message: "Internal Server Error", status: 500 });
+    }
+    const failures = logs.filter((log) => log.statusCode === 500);
+    expect(failures.map((log) => log.err?.message)).toEqual([
+      expect.stringContaining("Query read timeout"),
+      expect.stringContaining("connect ECONNREFUSED 10.0.0.1:5432"),
+    ]);
+  });
 });
+
+const AUTH = { authorization: "Bearer test-token" };
+
+function failingReplay(): ServerDeps["replay"] {
+  return {
+    token: "test-token",
+    query: async () => {
+      throw new Error("Query read timeout");
+    },
+    stats: async () => {
+      throw new Error("connect ECONNREFUSED 10.0.0.1:5432");
+    },
+    storage: async () => ({ databaseBytes: 0, tableBytes: 0, rowCount: 0 }),
+  };
+}

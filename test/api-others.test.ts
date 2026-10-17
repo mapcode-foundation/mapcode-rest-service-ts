@@ -231,6 +231,7 @@ describe("Method enforcement", () => {
   it("returns 405 for POST /mapcode/version", async () => {
     const res = await app.inject({ method: "POST", url: "/mapcode/version" });
     expect(res.statusCode).toBe(405);
+    expect(res.headers.allow).toBe("GET, HEAD");
   });
 
   it("returns 404 for unknown route", async () => {
