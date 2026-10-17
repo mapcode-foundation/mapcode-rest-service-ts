@@ -100,15 +100,17 @@ describe.skipIf(!dbUrl)("Postgres integration (TEST_DB_URL)", () => {
     expect(cols.anon).toEqual([0, 0, 1, 1]);
   });
 
-  it("backfills pre-marker anonymised rows on bootstrap, leaving full non-geo rows alone", async () => {
+  it("backfills pre-marker anonymised rows on bootstrap, leaving geo rows with a point and full non-geo rows alone", async () => {
     // Simulate a row written between the country column and the anon marker:
     // a geo kind without a point, anon still at its default.
-    await record(NON_GEO);
+    await record(GEO_ENCODE, DECODE, NON_GEO);
     await pool.query("INSERT INTO mapcode_request (ts,lat,lon,kind,status,client,mapcode,country) VALUES (1005,NULL,NULL,20,20::int::\"char\",0::int::\"char\",NULL,'FRA')");
     await ensureSchema(pool);
-    const res = await pool.query("SELECT ts, anon FROM mapcode_request WHERE ts IN (1002, 1005) ORDER BY ts");
+    const res = await pool.query("SELECT ts, anon FROM mapcode_request ORDER BY ts");
     expect(res.rows).toEqual([
-      { ts: 1002, anon: false }, // full non-geo row (kind 1) is not a geo kind: untouched
+      { ts: GEO_ENCODE.ts, anon: false },
+      { ts: DECODE.ts, anon: false },
+      { ts: NON_GEO.ts, anon: false },
       { ts: 1005, anon: true },
     ]);
   });
