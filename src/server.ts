@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { STATUS_CODES } from "node:http";
 import Fastify, {
+  type FastifyError,
   type FastifyInstance,
   type FastifyRequest,
   type FastifyReply,
@@ -70,24 +72,16 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // -------------------------------------------------------------------------
   // Error handler
   // -------------------------------------------------------------------------
-  app.setErrorHandler((error: Error, request: FastifyRequest, reply: FastifyReply) => {
+  app.setErrorHandler((error: FastifyError, request: FastifyRequest, reply: FastifyReply) => {
     const { format } = resolveFormat(request.url, request.headers.accept);
-    if (error instanceof ApiError) {
-      request.log.warn({
-        err: error,
-        method: request.method,
-        url: request.url,
-        statusCode: error.httpStatus,
-      }, "api request failed");
-      return respondError(reply, format, error.httpStatus, error.message);
-    }
-    request.log.error({
+    const failure = describeFailure(error);
+    request.log[failure.level]({
       err: error,
       method: request.method,
       url: request.url,
-      statusCode: 500,
-    }, "unexpected request error");
-    return respondError(reply, format, 500, error.message ?? "Internal Server Error");
+      statusCode: failure.status,
+    }, failure.logMessage);
+    return respondError(reply, format, failure.status, failure.message);
   });
 
   // -------------------------------------------------------------------------
@@ -112,10 +106,9 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
     // hook runs onRequest, before route matching, so routerOptions'
     // ignoreTrailingSlash hasn't applied yet — strip the query string and
     // any trailing slash by hand to match the registered paths.
-    if (method === "OPTIONS" && deps.replay !== undefined) {
-      const path = request.url.split("?")[0].replace(/\/+$/, "");
-      if (path === "/mapcode/replay" || path === "/mapcode/replay/stats") return;
-    }
+    const path = request.url.split("?")[0].replace(/\/+$/, "");
+    const isReplayPath = deps.replay !== undefined && (path === "/mapcode/replay" || path === "/mapcode/replay/stats");
+    if (method === "OPTIONS" && isReplayPath) return;
     if (method !== "GET" && method !== "HEAD") {
       const { format } = resolveFormat(request.url, request.headers.accept);
       request.log.warn({
@@ -123,6 +116,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
         url: request.url,
         statusCode: 405,
       }, "method not allowed");
+      reply.header("allow", isReplayPath ? "GET, HEAD, OPTIONS" : "GET, HEAD");
       return respondError(reply, format, 405, `Method not allowed: ${request.method}`);
     }
   });
@@ -138,4 +132,24 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   registerReplayRoutes(app, deps);
 
   return app;
+}
+
+interface Failure {
+  status: number;
+  message: string;
+  level: "warn" | "error";
+  logMessage: string;
+}
+
+// A client error keeps its status, but the body gets only the standard reason
+// phrase; anything else is a 500. Either way the detail goes to the log only.
+function describeFailure(error: FastifyError): Failure {
+  if (error instanceof ApiError) {
+    return { status: error.httpStatus, message: error.message, level: "warn", logMessage: "api request failed" };
+  }
+  const status = error.statusCode;
+  if (status !== undefined && status >= 400 && status < 500) {
+    return { status, message: STATUS_CODES[status] ?? "Bad Request", level: "warn", logMessage: "request rejected" };
+  }
+  return { status: 500, message: "Internal Server Error", level: "error", logMessage: "unexpected request error" };
 }

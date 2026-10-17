@@ -58,8 +58,9 @@ export async function handleReplayStats(
   } catch (err) {
     // Until the first rebuild scan completes there are no truthful numbers.
     if (err instanceof StatsNotReadyError) throw new ApiError(503, "Service Unavailable");
-    // Never let raw pg error text (hostnames, usernames, ...) reach the response body.
-    throw new ApiError(500, "Internal Server Error");
+    // Raw pg error text (hostnames, usernames, ...) never reaches the response
+    // body; as the cause, it reaches only the log.
+    throw new ApiError(500, "Internal Server Error", { cause: err });
   }
   const sum = (pick: (row: StatsKindCounts) => StatsCounts): StatsCounts => {
     const acc: StatsCounts = { "1m": 0, "1h": 0, "1d": 0, "7d": 0, "31d": 0, "1y": 0, all: 0 };

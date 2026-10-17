@@ -98,9 +98,10 @@ export async function handleReplay(
   let columns;
   try {
     columns = await query({ from, to, limit, kinds });
-  } catch {
-    // Never let raw pg error text (hostnames, usernames, ...) reach the response body.
-    throw new ApiError(500, "Internal Server Error");
+  } catch (err) {
+    // Raw pg error text (hostnames, usernames, ...) never reaches the response
+    // body; as the cause, it reaches only the log.
+    throw new ApiError(500, "Internal Server Error", { cause: err });
   }
   const count = columns.ts.length;
   const dto: Record<string, unknown> = { from, to, count, truncated: count >= limit, ...columns };

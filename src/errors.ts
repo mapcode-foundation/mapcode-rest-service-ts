@@ -14,8 +14,8 @@
 
 export class ApiError extends Error {
   readonly httpStatus: number;
-  constructor(httpStatus: number, message: string) {
-    super(message);
+  constructor(httpStatus: number, message: string, options?: ErrorOptions) {
+    super(message, options);
     this.name = new.target.name;
     this.httpStatus = httpStatus;
   }
