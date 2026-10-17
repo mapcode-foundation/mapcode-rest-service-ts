@@ -24,12 +24,11 @@ function toRadians(deg: number): number {
   return (deg * Math.PI) / 180.0;
 }
 
-/** Wrap a longitude in degrees into the range [-180, 180]. Mirrors speedtools Geo.mapToLon. */
+/** Wrap a longitude in degrees into the range [-180, 180). Literal port of speedtools Geo.mapToLon. */
 export function mapToLon(lonDeg: number): number {
-  let lon = lonDeg % 360;
-  if (lon > 180) lon -= 360;
-  else if (lon < -180) lon += 360;
-  return lon;
+  // The +180/-180 round trip adds float noise (4.8936337 -> 4.893633700000009); kept on purpose for Java parity.
+  const lon = (((lonDeg >= 0 ? lonDeg : -lonDeg) + 180) % 360 - 180) * (lonDeg >= 0 ? 1.0 : -1.0);
+  return lon === 180 ? -lon : lon;
 }
 
 /**
