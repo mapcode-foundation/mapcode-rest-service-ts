@@ -58,17 +58,13 @@ ALTER TABLE mapcode_request ADD COLUMN IF NOT EXISTS anon boolean NOT NULL DEFAU
 CREATE INDEX IF NOT EXISTS mapcode_request_ts_brin
   ON mapcode_request USING brin (ts);`;
 
-/**
- * One-off backfill for anonymised rows written before the anon marker existed
- * (country landed first, anon later). Those are exactly the geo-kind rows
- * without a point: the recorder never writes a geo kind with lat NULL unless
- * the call opted out. Setting a flag on rows that are anonymised by
- * construction does not breach the append-only rule (no row is removed or
- * reinterpreted). Idempotent via NOT anon, so ensureSchema can run it on every
- * bootstrap; it only ever does work once.
- */
+// Only rows before this (the record-everything week, pre-anon-column code) can carry a wrong
+// anon flag; newer rows keep what the recorder wrote, so do not move this date forward.
+const ANON_BACKFILL_CUTOFF_TS = Date.parse("2026-10-18T00:00:00Z") / 1000;
+
 export const ANON_BACKFILL_SQL =
-  "UPDATE mapcode_request SET anon = true WHERE lat IS NULL AND kind IN (10, 11, 12, 13, 20) AND NOT anon";
+  "UPDATE mapcode_request SET anon = (status::int < 40)" +
+  ` WHERE ts < ${ANON_BACKFILL_CUTOFF_TS} AND lat IS NULL AND kind IN (10, 11, 12, 13, 20) AND anon <> (status::int < 40)`;
 
 /** Idempotent schema bootstrap (CREATE ... IF NOT EXISTS), then the anon backfill. */
 export async function ensureSchema(pool: RecorderPool): Promise<void> {
