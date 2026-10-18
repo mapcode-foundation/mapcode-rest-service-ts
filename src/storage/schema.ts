@@ -58,6 +58,8 @@ ALTER TABLE mapcode_request ADD COLUMN IF NOT EXISTS anon boolean NOT NULL DEFAU
 CREATE INDEX IF NOT EXISTS mapcode_request_ts_brin
   ON mapcode_request USING brin (ts);`;
 
+// Only rows before this (the record-everything week, pre-anon-column code) can carry a wrong
+// anon flag; newer rows keep what the recorder wrote, so do not move this date forward.
 const ANON_BACKFILL_CUTOFF_TS = Date.parse("2026-10-18T00:00:00Z") / 1000;
 
 export const ANON_BACKFILL_SQL =
