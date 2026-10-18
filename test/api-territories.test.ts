@@ -255,6 +255,46 @@ describe("checkTerritoryStateJson", () => {
     expect(res.statusCode).toBe(400);
   });
 
+  it("GET /mapcode/territories/IN?context=XXXX → 400 blaming 'parent' (JSON)", async () => {
+    const res = await getJson("/mapcode/territories/IN?context=XXXX");
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toBe(
+      `{"message":"Invalid format for 'parent': 'XXXX', expected: valid territory code (e.g. NLD, US-CA)","status":400}`
+    );
+  });
+
+  it("GET /mapcode/territories/IN?context=XXXX → 400 blaming 'parent' (XML)", async () => {
+    const res = await getXml("/mapcode/territories/IN?context=XXXX");
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toBe(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><exception><message>Invalid format for 'parent': 'XXXX', expected: valid territory code (e.g. NLD, US-CA)</message><status>400</status></exception>`
+    );
+  });
+
+  it("GET /mapcode/territories/IN?context=X%26amp%3BY → 'parent' reports the unescaped context", async () => {
+    const res = await getJson("/mapcode/territories/IN?context=X%26amp%3BY");
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toBe(
+      `{"message":"Invalid format for 'parent': 'X&Y', expected: valid territory code (e.g. NLD, US-CA)","status":400}`
+    );
+  });
+
+  it("GET /mapcode/territories/ZZZZ?context=XXXX → 400 blaming 'parent' before 'territory'", async () => {
+    const res = await getJson("/mapcode/territories/ZZZZ?context=XXXX");
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toBe(
+      `{"message":"Invalid format for 'parent': 'XXXX', expected: valid territory code (e.g. NLD, US-CA)","status":400}`
+    );
+  });
+
+  it("GET /mapcode/territories/in?context=nld → 400 still blaming 'territory'", async () => {
+    const res = await getJson("/mapcode/territories/in?context=nld");
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toBe(
+      `{"message":"Invalid format for 'territory': 'in', expected: valid territory code (e.g. NLD, US-CA)","status":400}`
+    );
+  });
+
   it("GET /mapcode/territories/in with repeated context → 400", async () => {
     const res = await getJson("/mapcode/territories/in?context=us&context=ru");
     expect(res.statusCode).toBe(400);

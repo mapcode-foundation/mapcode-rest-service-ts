@@ -49,7 +49,8 @@ export interface MapcodeService {
    * Resolve a territory string (uppercased) with optional parent disambiguation. The optional
    * parent string is additionally '-' → '_' normalized before being resolved as a context.
    * Ports the Java `resolveTerritory` + `getTerritoryAlias` algorithm faithfully.
-   * Throws if the territory cannot be resolved.
+   * Throws UnknownParentTerritoryError for an unknown parent; any other error means the territory
+   * cannot be resolved.
    */
   resolveTerritory(territory: string, parent: string | null): Territory;
 
@@ -123,6 +124,15 @@ function getTerritoryAlias(paramAlias: string): Territory | null {
 // resolveTerritory — port of MapcodeResourceImpl.resolveTerritory
 // ---------------------------------------------------------------------------
 
+export class UnknownParentTerritoryError extends Error {
+  readonly parent: string;
+  constructor(parent: string) {
+    super(`Unknown parent territory '${parent}'`);
+    this.name = new.target.name;
+    this.parent = parent;
+  }
+}
+
 /**
  * Port of the Java `resolveTerritory` private static method.
  *
@@ -151,9 +161,7 @@ function resolveTerritory(paramTerritory: string, paramParent: string | null): T
       // Check if it was an alias.
       const alias = getTerritoryAlias(paramParent);
       if (alias === null) {
-        throw new Error(
-          `Invalid parent territory '${paramParent}': not a known territory or alias`
-        );
+        throw new UnknownParentTerritoryError(paramParent);
       }
       context = alias;
     }
