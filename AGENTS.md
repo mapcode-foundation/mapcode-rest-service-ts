@@ -3,30 +3,6 @@
 Working rules for AI agents in this repository. Keep this file short; remove
 anything that stops being true.
 
-## Use the Superpowers skills
-
-- Every software-development task goes through the Superpowers skills:
-  `superpowers:brainstorming` before new features or behaviour changes,
-  `superpowers:writing-plans` for multi-step work,
-  `superpowers:subagent-driven-development` or `superpowers:executing-plans`
-  to implement a plan, `superpowers:systematic-debugging` for bugs,
-  `superpowers:verification-before-completion` before claiming anything is
-  done, and `superpowers:finishing-a-development-branch` to integrate.
-- If a skill plausibly applies, invoke it. Do not work around it.
-
-## Test-driven development
-
-- Follow `superpowers:test-driven-development`: write the failing test,
-  run it and watch it fail, implement the minimum, run it and watch it pass.
-- Tests are vitest, flat in `test/`. Fake pools implement
-  `{ query(text, values?) }` structurally; never mock `pg` internals.
-- Before every commit: `npm test`, `npm run typecheck`, and for changes that
-  touch startup or `src/storage/`, the dev-runner smoke test
-  `MAPCODE_DB_URL= MAPCODE_BORDERS_PATH=test/resources/borders-test.fgb timeout 30 npm run dev`
-  must print the "listening" line.
-- Real-Postgres tests live in `test/db-integration.test.ts`, gated on
-  `TEST_DB_URL`; run them when touching SQL or the schema.
-
 ## Always bump the version
 
 - After building a feature or implementing a fix, bump the version before
@@ -43,10 +19,64 @@ anything that stops being true.
   properties or enums.
 - Every source and test file starts with the repository's 13-line
   Apache-2.0 header (copy it from any neighbour).
-- Commit subjects are short and imperative with no conventional-commit
-  prefix. Never `git push` unless explicitly asked.
 - `MAPCODE_DB_URL` contains a password: never log it. Raw database error
   text never reaches a response body.
 - The event log (`mapcode_request`) is append-only: no `DELETE`,
   `TRUNCATE`, or retention job, ever.
-- `docs/` is git-ignored; plans and specs live there and are not committed.
+
+<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:46cd31e7 -->
+## Beads Issue Tracker
+
+This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
+
+### Quick Reference
+
+```bash
+bd ready              # Find available work
+bd show <id>          # View issue details
+bd update <id> --claim  # Claim work
+bd close <id>         # Complete work
+```
+
+### Rules
+
+- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
+- Run `bd prime` for detailed command reference and session close protocol
+- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
+
+**Architecture in one line:** issues live in a local Dolt DB; sync uses `refs/dolt/data` on your git remote; `.beads/issues.jsonl` is a passive export. See https://github.com/gastownhall/beads/blob/main/docs/core-concepts/sync-concepts.md for details and anti-patterns.
+
+## Agent Context Profiles
+
+The managed Beads block is task-tracking guidance, not permission to override repository, user, or orchestrator instructions.
+
+- **Conservative (default)**: Use `bd` for task tracking. Do not run git commits, git pushes, or Dolt remote sync unless explicitly asked. At handoff, report changed files, validation, and suggested next commands.
+- **Minimal**: Keep tool instruction files as pointers to `bd prime`; use the same conservative git policy unless active instructions say otherwise.
+- **Team-maintainer**: Only when the repository explicitly opts in, agents may close beads, run quality gates, commit, and push as part of session close. A current "do not commit" or "do not push" instruction still wins.
+
+## Session Completion
+
+This protocol applies when ending a Beads implementation workflow. It is subordinate to explicit user, repository, and orchestrator instructions.
+
+1. **File issues for remaining work** - Create beads for anything that needs follow-up
+2. **Run quality gates** (if code changed) - Tests, linters, builds
+3. **Update issue status** - Close finished work, update in-progress items
+4. **Handle git/sync by active profile**:
+   ```bash
+   # Conservative/minimal/default: report status and proposed commands; wait for approval.
+   git status
+
+   # Team-maintainer opt-in only, unless current instructions forbid it:
+   git pull --rebase
+   bd dolt push
+   git push
+   git status
+   ```
+5. **Hand off** - Summarize changes, validation, issue status, and any blocked sync/commit/push step
+
+**Critical rules:**
+- Explicit user or orchestrator instructions override this Beads block.
+- Do not commit or push without clear authority from the active profile or the current user request.
+- If a required sync or push is blocked, stop and report the exact command and error.
+<!-- END BEADS INTEGRATION -->
+
