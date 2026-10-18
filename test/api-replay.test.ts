@@ -248,6 +248,15 @@ describe("CORS preflight", () => {
   it("still 405s OPTIONS on every other route", async () => {
     const res = await app.inject({ method: "OPTIONS", url: "/mapcode/version" });
     expect(res.statusCode).toBe(405);
+    expect(res.headers.allow).toBe("GET, HEAD");
+  });
+
+  it("405s other methods on the replay paths with OPTIONS in Allow", async () => {
+    for (const url of ["/mapcode/replay", "/mapcode/replay/stats/"]) {
+      const res = await app.inject({ method: "POST", url });
+      expect(res.statusCode).toBe(405);
+      expect(res.headers.allow).toBe("GET, HEAD, OPTIONS");
+    }
   });
 });
 
@@ -260,7 +269,9 @@ describe("without replay deps", () => {
     expect((await bare.inject({ method: "GET", url: "/mapcode/replay?from=1" })).statusCode).toBe(404);
     expect((await bare.inject({ method: "GET", url: "/mapcode/replay/stats" })).statusCode).toBe(404);
     expect((await bare.inject({ method: "OPTIONS", url: "/mapcode/replay" })).statusCode).toBe(405);
-    expect((await bare.inject({ method: "OPTIONS", url: "/mapcode/replay/stats" })).statusCode).toBe(405);
+    const options = await bare.inject({ method: "OPTIONS", url: "/mapcode/replay/stats" });
+    expect(options.statusCode).toBe(405);
+    expect(options.headers.allow).toBe("GET, HEAD");
     await bare.close();
   });
 });

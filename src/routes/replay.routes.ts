@@ -45,13 +45,6 @@ export function registerReplayRoutes(app: FastifyInstance, deps: ServerDeps): vo
   if (replay === undefined) return;
 
   const replayHandler: RouteHandlerMethod = async (request, reply) => {
-    // Set before the auth check (and before anything can throw) so every
-    // response from this route — 200, 400, 401, or 500 — carries it: headers
-    // set on the reply persist through Fastify's error handler. Wildcard CORS
-    // is safe: auth is a Bearer header, not an ambient credential a foreign
-    // origin could ride on.
-    reply.header("access-control-allow-origin", "*");
-
     if (!bearerTokenMatches(request.headers.authorization, replay.token)) {
       throw new ApiUnauthorizedError("Missing or invalid Bearer token");
     }
@@ -73,7 +66,6 @@ export function registerReplayRoutes(app: FastifyInstance, deps: ServerDeps): vo
   };
 
   const statsHandler: RouteHandlerMethod = async (request, reply) => {
-    reply.header("access-control-allow-origin", "*");
     if (!bearerTokenMatches(request.headers.authorization, replay.token)) {
       throw new ApiUnauthorizedError("Missing or invalid Bearer token");
     }
@@ -87,6 +79,14 @@ export function registerReplayRoutes(app: FastifyInstance, deps: ServerDeps): vo
   // Compression scoped to these routes only — the parity endpoints'
   // byte-for-byte responses must never see a content-encoding change.
   app.register(async (scope) => {
+    // Set onRequest, before the auth check and before compress can reject the
+    // request, so every response from these routes carries it: headers set on
+    // the reply persist through Fastify's error handler. Wildcard CORS is
+    // safe: auth is a Bearer header, not an ambient credential a foreign
+    // origin could ride on.
+    scope.addHook("onRequest", async (_request, reply) => {
+      reply.header("access-control-allow-origin", "*");
+    });
     await scope.register(compress);
     scope.get("/mapcode/replay", replayHandler);
     scope.get("/mapcode/replay/stats", statsHandler);
