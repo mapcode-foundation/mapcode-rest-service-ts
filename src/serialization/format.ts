@@ -13,13 +13,20 @@
 // limitations under the License.
 
 /**
- * Format a number the way Java's Double.toString / Jackson would: integer-valued
- * doubles keep a trailing ".0"; other values use JS shortest round-trip (which
- * matches Java for the value ranges this service emits). Tuned by the Task 13 sweep.
+ * Format a number the way Java's Double.toString / Jackson / JAXB would: plain
+ * decimal with at least one fractional digit for 1e-3 <= |n| < 1e7, otherwise
+ * computerized scientific notation such as "2.0E-6" or "1.0E7".
  */
 export function formatDouble(n: number): string {
   if (!Number.isFinite(n)) throw new Error(`Cannot format non-finite double: ${n}`);
   if (Object.is(n, -0)) return "-0.0";
+  const abs = Math.abs(n);
+  if (n !== 0 && (abs < 1e-3 || abs >= 1e7)) {
+    const shortest = n.toExponential();
+    // Java needs two significant digits; for subnormals the closest pair can differ from "d.0".
+    const [mantissa, exponent] = (shortest.includes(".") ? shortest : n.toExponential(1)).split("e");
+    return `${mantissa}E${Number(exponent)}`;
+  }
   if (Number.isInteger(n)) return `${n}.0`;
   return String(n);
 }

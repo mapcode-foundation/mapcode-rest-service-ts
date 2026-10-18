@@ -24,19 +24,21 @@ function toRadians(deg: number): number {
   return (deg * Math.PI) / 180.0;
 }
 
-/** Wrap a longitude in degrees into the range [-180, 180]. Mirrors speedtools Geo.mapToLon. */
+/** Wrap a longitude in degrees into the range [-180, 180). Literal port of speedtools Geo.mapToLon. */
 export function mapToLon(lonDeg: number): number {
-  let lon = lonDeg % 360;
-  if (lon > 180) lon -= 360;
-  else if (lon < -180) lon += 360;
-  return lon;
+  // The +180/-180 round trip adds float noise (4.8936337 -> 4.893633700000009); kept on purpose for Java parity.
+  const lon = (((lonDeg >= 0 ? lonDeg : -lonDeg) + 180) % 360 - 180) * (lonDeg >= 0 ? 1.0 : -1.0);
+  return lon === 180 ? -lon : lon;
 }
 
 /**
  * Distance in meters between two lat/lon points using the equirectangular (flat-earth)
- * approximation from speedtools Geo.distanceInMeters. Elevation is assumed 0.
+ * approximation from speedtools Geo.distanceInMeters. Elevation is assumed 0. Both longitudes
+ * go through mapToLon first, as the speedtools GeoPoint constructor does.
  */
-export function distanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+export function distanceInMeters(lat1: number, rawLon1: number, lat2: number, rawLon2: number): number {
+  const lon1 = mapToLon(rawLon1);
+  const lon2 = mapToLon(rawLon2);
   const wrappedOnLongSide = lon1 > lon2;
   let deltaLonDegrees = wrappedOnLongSide ? 360.0 - (lon1 - lon2) : lon2 - lon1;
   if (deltaLonDegrees > 180.0) {

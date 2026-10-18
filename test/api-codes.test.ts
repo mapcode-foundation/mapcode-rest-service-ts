@@ -288,3 +288,19 @@ describe("checkCodesIncludeXml", () => {
     );
   });
 });
+
+describe("checkCodesSubMillimeterOffset", () => {
+  const url = "/mapcode/codes/52.4625727,4.8936337/international?precision=8&include=offset";
+  it("json writes Java's 3.0E-6, not 0.000003", async () => {
+    const res = await getJson(url);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe('{"mapcode":"VHXFX.RCXJ-95M12510","offsetMeters":3.0E-6}');
+  });
+  it("xml writes Java's 3.0E-6, not 0.000003", async () => {
+    const res = await getXml(url);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe(
+      '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><mapcode><mapcode>VHXFX.RCXJ-95M12510</mapcode><offsetMeters>3.0E-6</offsetMeters></mapcode>'
+    );
+  });
+});
