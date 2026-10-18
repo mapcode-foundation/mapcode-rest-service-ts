@@ -14,33 +14,57 @@
 
 export type OutputFormat = "json" | "xml";
 
+type Weight = { specificity: number; q: number };
+
+function rangeSpecificity(range: string, mediaType: string): number {
+  if (range === mediaType) {
+    return 2;
+  }
+  if (range === "application/*") {
+    return 1;
+  }
+  if (range === "*/*") {
+    return 0;
+  }
+  return -1;
+}
+
 function preferredFormat(acceptHeader?: string): OutputFormat {
   if (acceptHeader === undefined) {
     return "json";
   }
 
-  let jsonQ = -1;
-  let xmlQ = -1;
+  const json: Weight = { specificity: -1, q: 0 };
+  const xml: Weight = { specificity: -1, q: 0 };
   for (const entry of acceptHeader.split(",")) {
     const [typePart, ...paramParts] = entry.split(";");
-    const mediaType = typePart.trim().toLowerCase();
+    const range = typePart.trim().toLowerCase();
     let q = 1;
     for (const param of paramParts) {
       const [rawName, rawValue] = param.split("=");
       if (rawName.trim().toLowerCase() === "q") {
         const parsed = Number(rawValue);
-        q = Number.isFinite(parsed) ? parsed : 0;
+        q = Number.isFinite(parsed) ? Math.min(Math.max(parsed, 0), 1) : 0;
       }
     }
-    if (mediaType === "application/json") {
-      jsonQ = Math.max(jsonQ, q);
-    }
-    if (mediaType === "application/xml") {
-      xmlQ = Math.max(xmlQ, q);
+    for (const [weight, mediaType] of [
+      [json, "application/json"],
+      [xml, "application/xml"],
+    ] as const) {
+      const specificity = rangeSpecificity(range, mediaType);
+      if (specificity < 0) {
+        continue;
+      }
+      if (specificity > weight.specificity) {
+        weight.specificity = specificity;
+        weight.q = q;
+      } else if (specificity === weight.specificity) {
+        weight.q = Math.max(weight.q, q);
+      }
     }
   }
 
-  return xmlQ >= 0 && xmlQ >= jsonQ ? "xml" : "json";
+  return xml.q > json.q ? "xml" : "json";
 }
 
 /**
@@ -49,7 +73,7 @@ function preferredFormat(acceptHeader?: string): OutputFormat {
  * Rules (in priority order):
  *   1. Path starts with /mapcode/xml/  → format "xml"
  *   2. Path starts with /mapcode/json/ → format "json"
- *   3. Accept header contains application/xml → format "xml"
+ *   3. Accept header weights application/xml above application/json → format "xml"
  *   4. Default → "json"
  *
  * Also returns the `underlyingPath`: the path with the /xml/ or /json/ prefix
