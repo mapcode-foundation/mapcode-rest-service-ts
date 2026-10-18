@@ -196,11 +196,16 @@ and `mapcode` null and `anon: 1`, so a client can stack them into a timeline;
 fully recorded non-geo rows are not returned, since they cannot be plotted.
 
 The `anon` column arrived after `country`. Rows anonymised in between are
-geo-kind rows without a point, and the schema bootstrap backfills their flag
-automatically with one idempotent `UPDATE ... WHERE lat IS NULL AND kind IN
-(10, 11, 12, 13, 20) AND NOT anon` on every start (it only ever does work
-once). This sets a flag on rows that are anonymised by construction; no row is
-removed or reinterpreted, so the append-only rule holds. No manual step.
+successful geo-kind calls without a point, and the schema bootstrap sets their
+flag. But a missing point does not prove a row is anonymised: from 2026-08-27
+to 2026-09-03 failed calls were recorded too, and a failed geo call has no
+point either. So on every start the bootstrap runs one idempotent `UPDATE ...
+SET anon = (status::int < 40) WHERE lat IS NULL AND kind IN (10, 11, 12, 13,
+20)` over rows written before 2026-10-18. The status column holds 40 for a
+400, so the 4xx rows stay unflagged, and the same pass clears the flag that
+an earlier version of this backfill set on them. Later rows keep the flag the
+recorder wrote. Only the flag changes and no row is removed, so the
+append-only rule holds. No manual step.
 
 `GET /mapcode/replay` is token-protected — it requires
 `Authorization: Bearer <MAPCODE_REPLAY_TOKEN>`, else 401. It is JSON-only (no

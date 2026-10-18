@@ -55,11 +55,11 @@ describe("schema DDL", () => {
     expect(SCHEMA_DDL.indexOf("anon boolean")).toBeGreaterThan(SCHEMA_DDL.indexOf("country text"));
   });
 
-  it("backfills pre-marker anonymised rows idempotently: geo kinds with lat NULL, never anything else", () => {
-    expect(ANON_BACKFILL_SQL).toContain("UPDATE mapcode_request SET anon = true");
+  it("backfills pre-marker anonymised rows idempotently from the status: geo kinds with lat NULL, never anything else", () => {
+    expect(ANON_BACKFILL_SQL).toContain("UPDATE mapcode_request SET anon = (status::int < 40)");
     expect(ANON_BACKFILL_SQL).toContain("lat IS NULL");
     expect(ANON_BACKFILL_SQL).toContain("kind IN (10, 11, 12, 13, 20)");
-    expect(ANON_BACKFILL_SQL).toContain("NOT anon");
+    expect(ANON_BACKFILL_SQL).toContain("anon <> (status::int < 40)");
     expect(ANON_BACKFILL_SQL).not.toMatch(/DELETE|TRUNCATE/);
   });
 

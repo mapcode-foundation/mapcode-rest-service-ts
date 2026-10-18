@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Opt-in tests of the schema bootstrap against a real Postgres, skipped unless
-// TEST_DB_URL is set. Each test runs in its own throwaway schema (search_path
-// pinned to it, dropped afterwards), so it never touches a real mapcode_request.
-//   TEST_DB_URL=postgres://postgres:test@localhost:5433/postgres npx vitest run test/schema-db.test.ts
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
@@ -25,12 +21,10 @@ import { scanStats } from "../src/storage/stats-query.ts";
 
 const dbUrl = process.env.TEST_DB_URL;
 
-/** The table as deployed from 2026-08-27 to 2026-09-03, when every request was recorded, 4xx included. */
 const TABLE_BEFORE_COUNTRY = `CREATE TABLE mapcode_request (
   ts integer NOT NULL, lat integer, lon integer, kind smallint NOT NULL,
   status "char" NOT NULL, client "char" NOT NULL, mapcode text)`;
 
-/** The table after the anon marker landed: the shape an already-bootstrapped database has. */
 const TABLE_WITH_ANON = `CREATE TABLE mapcode_request (
   ts integer NOT NULL, lat integer, lon integer, kind smallint NOT NULL,
   status "char" NOT NULL, client "char" NOT NULL, mapcode text,
@@ -100,5 +94,19 @@ describe.skipIf(!dbUrl)("schema bootstrap on Postgres (TEST_DB_URL)", () => {
     ]);
     const count = await pool.query("SELECT count(*)::int AS n FROM mapcode_request");
     expect(count.rows[0].n).toBe(4);
+  });
+
+  it("keeps the anon flag the recorder wrote on rows from 2026-10-18 on", async () => {
+    await pool.query(TABLE_WITH_ANON);
+    await pool.query(`INSERT INTO mapcode_request (ts, lat, lon, kind, status, client, country, anon) VALUES
+      (1792281600, NULL, NULL, 10, 50::int::"char", 0::int::"char", 'NLD', true),
+      (1792281600, NULL, NULL, 11, 20::int::"char", 0::int::"char", NULL, false)`);
+
+    await ensureSchema(pool);
+
+    const cols = await queryReplay(pool, { from: 0, to: 2_000_000_000, limit: 10, kinds: null });
+    expect(cols.kind).toEqual([10]);
+    expect(cols.anon).toEqual([1]);
+    expect(await anonRows()).toEqual([{ kind: 10, n: 1 }]);
   });
 });
