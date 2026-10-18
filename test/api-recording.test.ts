@@ -140,7 +140,7 @@ describe("replay endpoints are never recorded", () => {
       recorder: captureRecorder,
       replay: {
         token: "t",
-        query: async () => ({ ts: [], kind: [], lat: [], lon: [], status: [], client: [], mapcode: [] }),
+        query: async () => ({ ts: [], kind: [], lat: [], lon: [], status: [], client: [], mapcode: [], country: [], anon: [] }),
         stats: async () => [],
         storage: async () => ({ databaseBytes: 0, tableBytes: 0, rowCount: 0 }),
       },

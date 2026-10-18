@@ -21,9 +21,7 @@ import { BoundaryService, pointInRing } from "../src/domain/boundary-service.ts"
 // mocked module returns this value; otherwise it delegates to the real implementation.
 // This lets us exercise the load() CSR-build path with hand-built FeatureCollections
 // without disturbing the tests that read the real .fgb fixture.
-let deserializeOverride:
-  | ((bytes: Uint8Array) => unknown)
-  | null = null;
+let deserializeOverride: (() => unknown) | null = null;
 
 vi.mock("flatgeobuf", async (importOriginal) => {
   const actual = await importOriginal<typeof import("flatgeobuf")>();
@@ -33,7 +31,7 @@ vi.mock("flatgeobuf", async (importOriginal) => {
       ...actual.geojson,
       deserialize: (...args: Parameters<typeof actual.geojson.deserialize>) =>
         deserializeOverride
-          ? deserializeOverride(args[0] as Uint8Array)
+          ? deserializeOverride()
           : (actual.geojson.deserialize as (...a: unknown[]) => unknown)(...args),
     },
   };
