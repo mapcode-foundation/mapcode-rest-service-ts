@@ -239,7 +239,7 @@ describe("server logging", () => {
 
 const AUTH = { authorization: "Bearer test-token" };
 
-function failingReplay(): ServerDeps["replay"] {
+function failingReplay(): NonNullable<ServerDeps["replay"]> {
   return {
     token: "test-token",
     query: async () => {
