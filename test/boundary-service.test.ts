@@ -19,7 +19,7 @@ import { BoundaryService, pointInRing } from "../src/domain/boundary-service.ts"
 
 // Optional per-test override for the flatgeobuf GeoJSON deserializer. When set, the
 // mocked module returns this value; otherwise it delegates to the real implementation.
-// This lets us exercise the load() CSR-build path with hand-built FeatureCollections
+// This lets us exercise the load() CSR-build path with hand-built features
 // without disturbing the tests that read the real .fgb fixture.
 let deserializeOverride: (() => unknown) | null = null;
 
@@ -141,7 +141,7 @@ describe("BoundaryService load — degenerate feature CSR rollback", () => {
   });
 
   it("handles a degenerate feature before a valid feature without spurious matches", async () => {
-    // Feed load() a hand-built FeatureCollection where a degenerate feature (a
+    // Feed load() hand-built features where a degenerate feature (a
     // non-empty polygon array whose rings are all empty -> no vertices appended)
     // PRECEDES a valid feature. Without the rollback, the degenerate feature leaves
     // phantom polygons/rings in the CSR arrays and desynchronizes featurePolyStart;
@@ -181,7 +181,9 @@ describe("BoundaryService load — degenerate feature CSR rollback", () => {
         },
       ],
     };
-    deserializeOverride = () => collection;
+    deserializeOverride = async function* () {
+      yield* collection.features;
+    };
 
     // Any path works; readFile content is ignored because deserialize is mocked.
     const svc = await BoundaryService.load(FIXTURE);
