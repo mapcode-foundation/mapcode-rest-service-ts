@@ -327,6 +327,10 @@ Apache-2.0.
 
 ## Release Notes
 
+### 2.11.4
+
+* Updated `mapcode-ts` to 1.0.3. It contains the same code as 1.0.2.
+
 ### 2.11.3
 
 * Updated `mapcode-ts` to 1.0.2, which renames 5 territories: COK to
