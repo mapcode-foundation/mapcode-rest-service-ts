@@ -152,11 +152,11 @@ export class BoundaryService {
     }
     const u8 = new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
-    let featureCollection: GeoJsonFeatureCollection;
+    const features: GeoJsonFeature[] = [];
     try {
-      featureCollection = geojson.deserialize(
-        u8,
-      ) as unknown as GeoJsonFeatureCollection;
+      for await (const feature of geojson.deserialize(u8)) {
+        features.push(feature as unknown as GeoJsonFeature);
+      }
     } catch (e) {
       throw new Error(`Failed to parse borders file: ${bordersPath}`, {
         cause: e,
@@ -182,7 +182,7 @@ export class BoundaryService {
     let polyCount = 0;
     let vertexCount = 0;
 
-    for (const feature of featureCollection.features) {
+    for (const feature of features) {
       // Snapshot the mutable CSR build-state BEFORE touching any of it, so a feature
       // that turns out to be skipped or degenerate can be rolled back to leave the
       // arrays exactly as they were at the start of this iteration.
@@ -418,9 +418,6 @@ interface GeoJsonGeometry {
 interface GeoJsonFeature {
   geometry: GeoJsonGeometry | null;
   properties: Record<string, unknown> | null;
-}
-interface GeoJsonFeatureCollection {
-  features: GeoJsonFeature[];
 }
 
 // A linear ring: an ordered list of [lon, lat] coordinate pairs.

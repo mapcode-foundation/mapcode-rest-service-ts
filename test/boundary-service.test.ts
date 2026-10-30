@@ -181,7 +181,9 @@ describe("BoundaryService load — degenerate feature CSR rollback", () => {
         },
       ],
     };
-    deserializeOverride = () => collection;
+    deserializeOverride = async function* () {
+      yield* collection.features;
+    };
 
     // Any path works; readFile content is ignored because deserialize is mocked.
     const svc = await BoundaryService.load(FIXTURE);

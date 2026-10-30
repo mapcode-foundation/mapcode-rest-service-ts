@@ -21,7 +21,7 @@
     "@fastify/compress": "^9.3.0",
     "fastify": "^5.12.7",
     "flatbush": "^4.4.0",
-    "flatgeobuf": "^3.38.0",
+    "flatgeobuf": "^4.6.1",
     "mapcode-ts": "1.0.1",
     "pg": "^8.23.1"
   },
