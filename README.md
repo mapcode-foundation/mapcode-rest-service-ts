@@ -324,3 +324,86 @@ test/                 vitest suite (per-endpoint ports + parity sweep)
 ## License
 
 Apache-2.0.
+
+## Release Notes
+
+### 2.11.2
+
+* Updated dependencies, including TypeScript 7, vitest 5 and flatgeobuf 4.
+* Updated `mapcode-ts` to 1.0.2, which renames 5 territories: COK to
+  "Cook Islands", FJI to "Republic of Fiji", PSE to "Palestine", CA-NL to
+  "Newfoundland and Labrador" and RU-IN to "Republic of Ingushetia". The
+  `fullName` field of the territory endpoints returns the new names.
+
+### 2.11.1
+
+* Fixed the anonymisation backfill, which flagged failed calls as anonymised.
+* A Postgres restart no longer crashes the service.
+* `Accept` ranges are weighed by specificity, `q=0` is honoured, `q` values
+  are clamped to 0..1 and ties go to JSON.
+* Error responses keep their 4xx status, and a 405 response carries an
+  `Allow` header.
+* An unknown territory context is reported as a bad `parent`.
+* Doubles outside [1e-3, 1e7) are formatted in E notation, and distances wrap
+  longitudes, both matching the Java service.
+* Added CI that runs the tests against Postgres 16 and typechecks the tests.
+
+### 2.11.0
+
+* Anonymised rows are marked, and replay and replay stats expose them.
+
+### 2.10.0
+
+* Calls with `allowLog=false` are recorded anonymised, with only their kind
+  and country.
+
+### 2.9.2
+
+* Documented that the `web` client tag is deprecated.
+
+### 2.9.1
+
+* Corrected the README on `client` and `allowLog`.
+
+### 2.9.0
+
+* Recognize `demo` as a client tag.
+
+### 2.8.1
+
+* Lowered the replay row cap to 200k.
+
+### 2.8.0
+
+* Raised the replay row cap from 500k to 1M.
+
+### 2.7.1
+
+* The stats cache is rebuilt hourly, with a catch-up right after boot.
+
+### 2.7.0
+
+* Widened replay to a 365-day window and 500k rows.
+* `/mapcode/replay/stats` is served from an incremental cache and answers 503
+  while the cache warms up.
+* Added a btree index on `mapcode_request.ts` and a statement timeout on the
+  Postgres pool.
+
+### 2.6.0
+
+* Successful calls to API endpoints are recorded in Postgres.
+* Added token-protected `/mapcode/replay` to read recorded calls back, with
+  CORS.
+* Added `/mapcode/replay/stats` with usage counters per window and endpoint
+  kind, the storage footprint and the burn rate.
+* Postgres connections support verified TLS.
+
+### 2.5.1
+
+* Added request logging.
+
+### 2.5.0
+
+* First official TypeScript web service release.
+* The versioning scheme changed to `major.minor.patch`, dropping the last
+  digit.
