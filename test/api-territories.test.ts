@@ -325,7 +325,7 @@ describe("checkTerritoryStateJson", () => {
     const res = await getJson("/mapcode/territories/in?context=ru");
     expect(res.statusCode).toBe(200);
     expect(res.body).toBe(
-      '{"alphaCode":"RU-IN","alphaCodeMinimalUnambiguous":"RU-IN","alphaCodeMinimal":"IN","fullName":"Ingushetia Republic","parentTerritory":"RUS","alphabets":[{"name":"CYRILLIC"},{"name":"ROMAN"}]}'
+      '{"alphaCode":"RU-IN","alphaCodeMinimalUnambiguous":"RU-IN","alphaCodeMinimal":"IN","fullName":"Republic of Ingushetia","parentTerritory":"RUS","alphabets":[{"name":"CYRILLIC"},{"name":"ROMAN"}]}'
     );
   });
 });
