@@ -17,7 +17,7 @@ import { gunzipSync } from "node:zlib";
 import type { FastifyInstance } from "fastify";
 import { buildServer } from "../src/server.ts";
 import { createMapcodeService } from "../src/domain/mapcode-service.ts";
-import { BoundaryService } from "../src/domain/boundary-service.ts";
+import { loadTestBorders } from "./borders-fixture.ts";
 import { StatsNotReadyError } from "../src/storage/stats-service.ts";
 import type { ReplayColumns, ReplayQueryArgs } from "../src/storage/replay-query.ts";
 import type { StatsKindCounts, StorageInfo } from "../src/storage/stats-query.ts";
@@ -36,10 +36,10 @@ let statsResult: StatsKindCounts[] | null;
 
 beforeAll(async () => {
   const mapcodeService = createMapcodeService();
-  const boundaryService = await BoundaryService.load("test/resources/borders-test.fgb");
+  const borders = await loadTestBorders();
   app = buildServer({
     mapcodeService,
-    boundaryService,
+    borders,
     version: "1.0",
     replay: {
       token: TOKEN,
@@ -263,8 +263,8 @@ describe("CORS preflight", () => {
 describe("without replay deps", () => {
   it("404s GET and 405s OPTIONS on /mapcode/replay", async () => {
     const mapcodeService = createMapcodeService();
-    const boundaryService = await BoundaryService.load("test/resources/borders-test.fgb");
-    const bare = buildServer({ mapcodeService, boundaryService, version: "1.0" });
+    const borders = await loadTestBorders();
+    const bare = buildServer({ mapcodeService, borders, version: "1.0" });
     await bare.ready();
     expect((await bare.inject({ method: "GET", url: "/mapcode/replay?from=1" })).statusCode).toBe(404);
     expect((await bare.inject({ method: "GET", url: "/mapcode/replay/stats" })).statusCode).toBe(404);

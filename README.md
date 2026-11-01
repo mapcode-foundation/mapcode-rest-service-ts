@@ -21,8 +21,9 @@ loads, and is easier to package and deploy as a Node.js service.
   with Node's type stripping and needs Node.js ≥ 22.6.0.
 - The [`mapcode-ts`](https://www.npmjs.com/package/mapcode-ts) library,
   installed from npm.
-- A **borders FlatGeobuf file** (`borders.fgb`) for the boundary/territory
-  lookups (see below).
+- The [`mapcode-ts-borders`](https://www.npmjs.com/package/mapcode-ts-borders)
+  library, installed from npm. It bundles the OpenStreetMap border data for the
+  boundary/territory lookups (see below).
 
 ## Install
 
@@ -30,25 +31,19 @@ loads, and is easier to package and deploy as a Node.js service.
 npm install
 ```
 
-## The borders file (`borders.fgb`)
+## The borders data
 
 The `/mapcode/codes/{lat},{lon}` default response and the
 `/mapcode/codes/{lat},{lon}/territories` endpoint look up OpenStreetMap
-administrative boundaries (point-in-polygon + ranking). These come from a
-[FlatGeobuf](https://flatgeobuf.org/) file that the service loads fully into
-memory on startup.
+administrative boundaries (point-in-polygon + ranking). The lookup is done by
+[`mapcode-ts-borders`](https://www.npmjs.com/package/mapcode-ts-borders), which
+ships the border data as a `borders.mcb` file (OpenStreetMap, May 2026). The
+service loads it fully into memory on startup and logs its source, for example
+`borders: OpenStreetMap 2026-05`. New border data comes with a new
+`mapcode-ts-borders` release.
 
-Point the service at it with the **`MAPCODE_BORDERS_PATH`** environment
-variable (required — the service refuses to start without it):
-
-```bash
-MAPCODE_BORDERS_PATH=./data/borders.fgb
-```
-
-The production `borders.fgb` (~22 MB) is produced by the Java repository's
-`tools/` pipeline (which ingests OSM extracts and writes the FlatGeobuf). That
-pipeline is **out of scope** for this port. A small fixture used by the test
-suite lives at `test/resources/borders-test.fgb`.
+A small fixture used by the test suite lives at `test/resources/borders-test.mcb`.
+`test/resources/README.md` explains how to regenerate it.
 
 ## Configuration
 
@@ -56,7 +51,6 @@ Configuration is read from environment variables (via `src/config.ts`):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `MAPCODE_BORDERS_PATH` | _(required)_ | Path to the `borders.fgb` file. |
 | `PORT` | `8080` | TCP port to listen on. |
 | `VERSION` | `package.json` version | Version string returned by `/mapcode/version`. |
 | `MAPCODE_DB_URL` | _(unset)_ | Optional Postgres connection string. When unset, request recording is disabled and `/mapcode/replay` is not registered. Contains credentials — never logged. **Do not put `sslmode` in the URL** (see TLS note below). |
@@ -81,7 +75,6 @@ example:
 
 ```dotenv
 # .env
-MAPCODE_BORDERS_PATH=./data/borders.fgb
 PORT=8080
 ```
 
@@ -100,7 +93,8 @@ Run the built server:
 
 ```bash
 npm run build
-MAPCODE_BORDERS_PATH=./data/borders.fgb node dist/index.js
+node dist/index.js
+# → borders: OpenStreetMap 2026-05
 # → mapcode-rest-service-ts listening on :8080 (version <package.json version>)
 curl localhost:8080/mapcode/version
 # {"version":"<package.json version>"}
@@ -185,7 +179,7 @@ bad methods) are not.
 A call with `allowLog=false|0|no` is recorded **anonymised**: `lat`, `lon` and
 `mapcode` are NULL, `anon` is true, and the `country` column holds the country
 of the requested (encode) or decoded (decode) point — the top-ranked
-borders-file match, lifted to its parent for a subdivision (`USA-CA` → `USA`);
+borders match, lifted to its parent for a subdivision (`US-CA` → `USA`);
 NULL at sea and for non-geo endpoints. Fully recorded rows leave `country`
 NULL, since it is derivable from the coordinates, and `anon` false. The `anon`
 flag is the only reliable marker: `country` alone cannot tell an anonymised
@@ -308,13 +302,13 @@ historical meta-traffic rows, so it can exceed
 
 ```
 src/
-  index.ts            entrypoint: load config → BoundaryService.load → buildServer → listen
+  index.ts            entrypoint: load config → loadBorders → buildServer → listen
   config.ts           env-based configuration
   errors.ts           ApiError hierarchy (HTTP status + message)
   server.ts           Fastify app: error/404/405 handlers, route registration
   routes/             HTTP layer (content negotiation, /xml//json/ aliases)
   resources/          framework-agnostic handler logic (ports of *ResourceImpl)
-  domain/             MapcodeService (wraps mapcode-ts), BoundaryService, geo helpers
+  domain/             MapcodeService (wraps mapcode-ts), borders loader, geo helpers
   dto/                DTO build* factories + serialization Schemas
   serialization/      JSON/XML serializers (byte-parity with Jackson/JAXB), formatDouble
   storage/            Postgres: pool, schema, request recorder, replay and stats queries
@@ -326,6 +320,18 @@ test/                 vitest suite (per-endpoint ports + parity sweep)
 Apache-2.0.
 
 ## Release Notes
+
+### 2.12.0
+
+* Border lookups now come from `mapcode-ts-borders` 1.0.0, which bundles the
+  OpenStreetMap data of May 2026. The responses stay the same for production
+  data.
+* The service always uses the data bundled with `mapcode-ts-borders`.
+  `MAPCODE_BORDERS_PATH` is no longer used and is ignored when set, so it can
+  be removed from deployments.
+* The FlatGeobuf files are removed, together with the `flatgeobuf` and
+  `flatbush` dependencies.
+* The startup log names the border data source.
 
 ### 2.11.4
 

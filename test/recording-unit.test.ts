@@ -23,8 +23,8 @@ import {
   kindFromRoute,
   rawQueryValue,
   isReplayFamilyUrl,
-  countryFromMatches,
 } from "../src/routes/recording.ts";
+import { loadTestBorders } from "./borders-fixture.ts";
 
 describe("condenseStatus", () => {
   it("keeps the 1st and 3rd digit", () => {
@@ -146,18 +146,15 @@ describe("rawQueryValue", () => {
   });
 });
 
-describe("countryFromMatches", () => {
-  it("takes the top match, preferring its parent (subdivision → country)", () => {
-    expect(countryFromMatches([{ alphaCode: "NLD", parentAlphaCode: null, adminLevel: 2, area: 1 }])).toBe("NLD");
-    expect(
-      countryFromMatches([
-        { alphaCode: "USA-CA", parentAlphaCode: "USA", adminLevel: 4, area: 1 },
-        { alphaCode: "USA", parentAlphaCode: null, adminLevel: 2, area: 9 },
-      ])
-    ).toBe("USA");
+describe("country of a border lookup", () => {
+  it("takes the top match, preferring its parent (subdivision → country)", async () => {
+    const borders = await loadTestBorders();
+    expect(borders.getCountry(52, 5)?.toString()).toBe("NLD");
+    expect(borders.getCountry(36, -120)?.toString()).toBe("USA");
   });
 
-  it("returns null when nothing matched (sea, poles)", () => {
-    expect(countryFromMatches([])).toBeNull();
+  it("is null when nothing matched (sea, poles)", async () => {
+    const borders = await loadTestBorders();
+    expect(borders.getCountry(0, -30)).toBeNull();
   });
 });

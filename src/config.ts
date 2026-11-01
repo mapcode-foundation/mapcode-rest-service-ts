@@ -17,7 +17,6 @@ import { fileURLToPath } from "node:url";
 
 export interface Config {
   port: number;
-  bordersPath: string;
   version: string;
   /** Postgres connection string; null → recording disabled, no replay route. */
   dbUrl: string | null;
@@ -104,10 +103,6 @@ export function loadEnvFileIfExists(path = ".env", env: NodeJS.ProcessEnv = proc
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const bordersPath = (env.MAPCODE_BORDERS_PATH ?? "").trim();
-  if (!bordersPath) {
-    throw new Error("MAPCODE_BORDERS_PATH is required (path to the borders.fgb file).");
-  }
   const port = parsePort(env.PORT?.trim());
   const version = (env.VERSION ?? "").trim() || packageVersion();
   const dbUrl = (env.MAPCODE_DB_URL ?? "").trim() || null;
@@ -117,5 +112,5 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (dbUrl !== null && replayToken === null) {
     throw new Error("MAPCODE_REPLAY_TOKEN is required when MAPCODE_DB_URL is set.");
   }
-  return { port, bordersPath, version, dbUrl, replayToken, dbCaCert };
+  return { port, version, dbUrl, replayToken, dbCaCert };
 }

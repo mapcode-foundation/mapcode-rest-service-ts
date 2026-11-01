@@ -15,7 +15,7 @@
 import type { MapcodeService } from "../domain/mapcode-service.ts";
 import { Territory, Alphabet, Mapcode, Rectangle, UnknownMapcodeError } from "../domain/mapcode-service.ts";
 import { decode as mapcodeDecode } from "mapcode-ts";
-import type { BoundaryService } from "../domain/boundary-service.ts";
+import { rankByBorders, type BorderMatch, type Borders } from "mapcode-ts-borders";
 import { mapToLon, distanceInMeters } from "../domain/geo.ts";
 import type { Schema } from "../serialization/types.ts";
 import {
@@ -83,7 +83,7 @@ interface MapcodeAndRectangle {
 // handleCodes — port of MapcodeResourceImpl.convertLatLonToMapcode (main overload).
 // ---------------------------------------------------------------------------
 
-export function handleCodes(params: CodesParams, mapcodeService: MapcodeService, boundaryService: BoundaryService): CodesResult {
+export function handleCodes(params: CodesParams, mapcodeService: MapcodeService, borders: Borders): CodesResult {
   const { latStr, lonStr, type: paramType, context, territory: paramTerritory, country: paramCountry, alphabet: paramAlphabet, include } = params;
   const paramPrecision = params.precision;
 
@@ -233,41 +233,22 @@ export function handleCodes(params: CodesParams, mapcodeService: MapcodeService,
 
   if (type === null) {
     // Boundary-derived territory candidates (ranked).
-    const territoryMatches = boundaryService.lookup(latDeg, lonDeg);
+    const territoryMatches = borders.getTerritories(latDeg, lonDeg);
     const territoryCandidates = territoryMatches.length === 0
       ? null
-      : territoryMatches.map((m) =>
-          buildTerritoryCandidate({ alphaCode: m.alphaCode, parentAlphaCode: m.parentAlphaCode ?? undefined }));
+      : territoryMatches.map(buildCandidate);
 
-    let effectiveLocalAndRectangle = mapcodeLocalAndRectangle;
-    if (territoryCandidates !== null) {
-      // Build a rank map (first occurrence wins).
-      const territoryRank = new Map<string, number>();
-      for (let i = 0; i < territoryMatches.length; i++) {
-        if (!territoryRank.has(territoryMatches[i].alphaCode)) {
-          territoryRank.set(territoryMatches[i].alphaCode, i);
-        }
-      }
-      // Stable sort by rank (codes whose territory is not present go last).
-      const MAX = Number.MAX_SAFE_INTEGER;
-      stableSort(mapcodesAndRectangles, (a, b) => {
-        const ra = territoryRank.get(a.mapcode.getTerritory().toString()) ?? MAX;
-        const rb = territoryRank.get(b.mapcode.getTerritory().toString()) ?? MAX;
-        return ra - rb;
-      });
-      const topTerritoryAlpha = territoryMatches[0].alphaCode;
-      for (const mr of mapcodesAndRectangles) {
-        if (topTerritoryAlpha === mr.mapcode.getTerritory().toString()) {
-          effectiveLocalAndRectangle = mr;
-          break;
-        }
-      }
-    }
+    const pairOf = new Map<Mapcode, MapcodeAndRectangle>(mapcodesAndRectangles.map((mr) => [mr.mapcode, mr]));
+    const ranked = rankByBorders(mapcodesAndRectangles.map((mr) => mr.mapcode), territoryMatches);
+    const orderedMapcodes = ranked.mapcodes.map((m) => pairOf.get(m) as MapcodeAndRectangle);
+    const effectiveLocalAndRectangle = ranked.best === null
+      ? mapcodeLocalAndRectangle
+      : (pairOf.get(ranked.best) as MapcodeAndRectangle);
 
     const dto = buildMapcodes({
       local: effectiveLocalAndRectangle === null ? undefined : dtoOf(effectiveLocalAndRectangle),
       international: dtoOf(mapcodeInternationalAndRectangle),
-      mapcodes: mapcodesAndRectangles.map(dtoOf),
+      mapcodes: orderedMapcodes.map(dtoOf),
       territories: territoryCandidates ?? undefined,
     });
     return { kind: "object", dto, schema: mapcodesSchema };
@@ -362,7 +343,7 @@ function decodeForOffset(mapcode: Mapcode, precision: number): { latDeg: number;
 export function handleTerritoriesForLatLon(
   latStr: string,
   lonStr: string,
-  boundaryService: BoundaryService
+  borders: Borders
 ): { dto: Record<string, unknown>; schema: Schema } {
   const latDeg = Number(emptyIfNull(latStr));
   if (latStr === "" || !Number.isFinite(latDeg) || !isBetween(latDeg, API_LAT_MIN, API_LAT_MAX)) {
@@ -374,11 +355,7 @@ export function handleTerritoriesForLatLon(
   }
   const lonDeg = mapToLon(lonRaw);
 
-  const matches = boundaryService.lookup(latDeg, lonDeg);
-  const dto = buildTerritoryCandidates({
-    territories: matches.map((m) =>
-      buildTerritoryCandidate({ alphaCode: m.alphaCode, parentAlphaCode: m.parentAlphaCode ?? undefined })),
-  });
+  const dto = buildTerritoryCandidates({ territories: borders.getTerritories(latDeg, lonDeg).map(buildCandidate) });
   return { dto, schema: territoryCandidatesSchema };
 }
 
@@ -386,20 +363,17 @@ export function handleTerritoriesForLatLon(
 // Helpers.
 // ---------------------------------------------------------------------------
 
+function buildCandidate(m: BorderMatch) {
+  return buildTerritoryCandidate({
+    alphaCode: m.territory.toString(),
+    parentAlphaCode: m.territory.getParentTerritory()?.toString(),
+  });
+}
+
 function emptyIfNull(s: string | undefined | null): string {
   return s ?? "";
 }
 
 function isBetween(v: number, min: number, max: number): boolean {
   return v >= min && v <= max;
-}
-
-/** Stable sort in place (Array.prototype.sort is stable in V8, but be explicit). */
-function stableSort<T>(arr: T[], cmp: (a: T, b: T) => number): void {
-  const indexed = arr.map((v, i) => [v, i] as [T, number]);
-  indexed.sort((a, b) => {
-    const c = cmp(a[0], b[0]);
-    return c !== 0 ? c : a[1] - b[1];
-  });
-  for (let i = 0; i < arr.length; i++) arr[i] = indexed[i][0];
 }

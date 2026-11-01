@@ -16,7 +16,8 @@ import { describe, it, expect, beforeAll, afterEach } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildServer, type ServerDeps } from "../src/server.ts";
 import { createMapcodeService, type MapcodeService } from "../src/domain/mapcode-service.ts";
-import { BoundaryService } from "../src/domain/boundary-service.ts";
+import { loadTestBorders } from "./borders-fixture.ts";
+import type { Borders } from "mapcode-ts-borders";
 
 interface LogRecord {
   level: number;
@@ -37,12 +38,12 @@ interface LogRecord {
 }
 
 let mapcodeService: MapcodeService;
-let boundaryService: BoundaryService;
+let borders: Borders;
 let openApps: FastifyInstance[] = [];
 
 beforeAll(async () => {
   mapcodeService = createMapcodeService();
-  boundaryService = await BoundaryService.load("test/resources/borders-test.fgb");
+  borders = await loadTestBorders();
 });
 
 afterEach(async () => {
@@ -68,7 +69,7 @@ function buildLoggedServer(replay?: ServerDeps["replay"]): { app: FastifyInstanc
 
   const app = buildServer({
     mapcodeService,
-    boundaryService,
+    borders,
     version: "1.0",
     logger: { level: "info", stream },
     replay,

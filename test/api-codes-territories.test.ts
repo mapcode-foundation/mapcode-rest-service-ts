@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { buildServer } from "../src/server.ts";
 import { createMapcodeService } from "../src/domain/mapcode-service.ts";
-import { BoundaryService } from "../src/domain/boundary-service.ts";
+import { loadTestBorders } from "./borders-fixture.ts";
 import type { FastifyInstance } from "fastify";
 
 // Ported verbatim from ApiCodesTerritoriesTest.java.
@@ -24,8 +24,8 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   const mapcodeService = createMapcodeService();
-  const boundaryService = await BoundaryService.load("test/resources/borders-test.fgb");
-  app = buildServer({ mapcodeService, boundaryService, version: "1.0" });
+  const borders = await loadTestBorders();
+  app = buildServer({ mapcodeService, borders, version: "1.0" });
   await app.ready();
 });
 
@@ -42,7 +42,7 @@ describe("pointInsideCountryReturnsCountryJson", () => {
 });
 
 describe("pointInsideSubdivisionReturnsSubdivisionThenCountryJson", () => {
-  it("(36,-120) inside USA-CA then USA", async () => {
+  it("(36,-120) inside US-CA then USA", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/mapcode/codes/36.0,-120.0/territories",
@@ -51,7 +51,7 @@ describe("pointInsideSubdivisionReturnsSubdivisionThenCountryJson", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toBe(
       '{"territories":[' +
-        '{"alphaCode":"USA-CA","parentAlphaCode":"USA"},' +
+        '{"alphaCode":"US-CA","parentAlphaCode":"USA"},' +
         '{"alphaCode":"USA"}]}'
     );
   });
@@ -70,7 +70,7 @@ describe("pointAtSeaReturnsEmptyListJson", () => {
 });
 
 describe("disputedRegionReturnsSmallerPolygonFirstJson", () => {
-  it("(6.5,106.5) DISPUTED-B before DISPUTED-A", async () => {
+  it("(6.5,106.5) HMD before BVT (nested polygons: smaller first)", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/mapcode/codes/6.5,106.5/territories",
@@ -79,8 +79,8 @@ describe("disputedRegionReturnsSmallerPolygonFirstJson", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).toBe(
       '{"territories":[' +
-        '{"alphaCode":"DISPUTED-B"},' +
-        '{"alphaCode":"DISPUTED-A"}]}'
+        '{"alphaCode":"HMD"},' +
+        '{"alphaCode":"BVT"}]}'
     );
   });
 });
