@@ -16,7 +16,7 @@ import { describe, it, expect, beforeAll, beforeEach } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildServer } from "../src/server.ts";
 import { createMapcodeService } from "../src/domain/mapcode-service.ts";
-import { BoundaryService } from "../src/domain/boundary-service.ts";
+import { loadTestBorders } from "./borders-fixture.ts";
 import type { RecordedRequest, RequestRecorder } from "../src/storage/request-recorder.ts";
 import { KIND } from "../src/routes/recording.ts";
 
@@ -34,8 +34,8 @@ let mapcodeService: ReturnType<typeof createMapcodeService>;
 
 beforeAll(async () => {
   mapcodeService = createMapcodeService();
-  const boundaryService = await BoundaryService.load("test/resources/borders-test.fgb");
-  app = buildServer({ mapcodeService, boundaryService, version: "1.0", recorder: captureRecorder });
+  const borders = await loadTestBorders();
+  app = buildServer({ mapcodeService, borders, version: "1.0", recorder: captureRecorder });
   await app.ready();
 });
 
@@ -135,7 +135,7 @@ describe("replay endpoints are never recorded", () => {
   it("skips /mapcode/replay and everything below it, matched or not", async () => {
     const withReplay = buildServer({
       mapcodeService,
-      boundaryService: await BoundaryService.load("test/resources/borders-test.fgb"),
+      borders: await loadTestBorders(),
       version: "1.0",
       recorder: captureRecorder,
       replay: {
@@ -176,7 +176,7 @@ describe("replay endpoints are never recorded", () => {
 });
 
 describe("allowLog", () => {
-  // The borders fixture has an NLD square around (52, 5) and a USA-CA square
+  // The borders fixture has an NLD square around (52, 5) and a US-CA square
   // (parent USA) around (36, -120); (0, 0) is open sea.
   it("records an anonymised row for false/0/no (case-insensitive): no coords, no mapcode, but the country", async () => {
     for (const v of ["false", "FALSE", "0", "no", "No"]) {
@@ -242,7 +242,7 @@ describe("parity", () => {
   it("produces byte-identical responses with and without the recorder", async () => {
     const bare = buildServer({
       mapcodeService,
-      boundaryService: await BoundaryService.load("test/resources/borders-test.fgb"),
+      borders: await loadTestBorders(),
       version: "1.0",
     });
     await bare.ready();

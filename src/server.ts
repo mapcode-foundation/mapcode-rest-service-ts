@@ -21,7 +21,7 @@ import Fastify, {
   type FastifyServerOptions,
 } from "fastify";
 import type { MapcodeService } from "./domain/mapcode-service.ts";
-import type { BoundaryService } from "./domain/boundary-service.ts";
+import type { Borders } from "mapcode-ts-borders";
 import { ApiError } from "./errors.ts";
 import { resolveFormat } from "./routes/negotiation.ts";
 import { respondError } from "./serialization/respond.ts";
@@ -42,7 +42,7 @@ import type { StatsQueryFn, StorageQueryFn } from "./storage/stats-query.ts";
 
 export interface ServerDeps {
   mapcodeService: MapcodeService;
-  boundaryService: BoundaryService;
+  borders: Borders;
   version: string;
   logger?: FastifyServerOptions["logger"];
   /** Optional request recorder; absent → no recording hook is installed. */
@@ -66,7 +66,7 @@ export function buildServer(deps: ServerDeps): FastifyInstance {
   // Per-request stash the route handlers fill for the recording hook.
   app.decorateRequest("recording", null);
   if (deps.recorder !== undefined) {
-    app.addHook("onResponse", createRecordingHook(deps.recorder, deps.boundaryService));
+    app.addHook("onResponse", createRecordingHook(deps.recorder, deps.borders));
   }
 
   // -------------------------------------------------------------------------

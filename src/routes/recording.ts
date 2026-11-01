@@ -19,7 +19,7 @@
 // ---------------------------------------------------------------------------
 
 import type { FastifyReply, FastifyRequest } from "fastify";
-import type { BoundaryService, TerritoryMatch } from "../domain/boundary-service.ts";
+import type { Borders } from "mapcode-ts-borders";
 import type { RequestRecorder } from "../storage/request-recorder.ts";
 
 /** Endpoint identity codes (smallint in the database, gapped for growth). */
@@ -100,15 +100,6 @@ export function allowLogDenies(allowLog: string | undefined): boolean {
   return value === "false" || value === "0" || value === "no";
 }
 
-/**
- * The country of a boundary lookup: the top-ranked match, lifted to its parent
- * when it is a subdivision (USA-CA → USA). null when nothing matched (open sea).
- */
-export function countryFromMatches(matches: readonly TerritoryMatch[]): string | null {
-  if (matches.length === 0) return null;
-  return matches[0].parentAlphaCode ?? matches[0].alphaCode;
-}
-
 /** Latitude degrees → microdegrees, rounded and clamped to ±90e6. */
 export function latToMicro(latDeg: number): number {
   return Math.min(90_000_000, Math.max(-90_000_000, Math.round(latDeg * 1e6)));
@@ -187,7 +178,7 @@ export function rawQueryValue(query: unknown, name: string): string | undefined 
  * Runs off the response path (onResponse fires after the bytes went out) and
  * must never throw — recording failures must never surface to callers.
  */
-export function createRecordingHook(recorder: RequestRecorder, boundaryService: BoundaryService) {
+export function createRecordingHook(recorder: RequestRecorder, borders: Borders) {
   return function recordRequest(request: FastifyRequest, reply: FastifyReply, done: () => void): void {
     try {
       // Only successful calls to real API endpoints are usage: CORS preflights
@@ -214,7 +205,7 @@ export function createRecordingHook(recorder: RequestRecorder, boundaryService: 
               lat: null,
               lon: null,
               mapcode: null,
-              country: hasPoint ? countryFromMatches(boundaryService.lookup(stash.latDeg!, stash.lonDeg!)) : null,
+              country: hasPoint ? (borders.getCountry(stash.latDeg!, stash.lonDeg!)?.toString() ?? null) : null,
               anon: true,
             });
           } else {

@@ -13,7 +13,7 @@
 // limitations under the License.
 
 import { loadConfig, loadEnvFileIfExists } from "./config.ts";
-import { BoundaryService } from "./domain/boundary-service.ts";
+import { loadBorders } from "./domain/load-borders.ts";
 import { createMapcodeService } from "./domain/mapcode-service.ts";
 import { createPool, MAINTENANCE_POOL_TUNING } from "./storage/pool.ts";
 import { createRequestRecorder } from "./storage/request-recorder.ts";
@@ -26,7 +26,9 @@ import { buildServer } from "./server.ts";
 async function main(): Promise<void> {
   loadEnvFileIfExists();
   const config = loadConfig();
-  const boundaryService = await BoundaryService.load(config.bordersPath);
+  const borders = await loadBorders(config.bordersPath);
+  const bordersSource = borders.getSource();
+  console.log(`borders: ${bordersSource.name} ${bordersSource.snapshotDate}`);
   const mapcodeService = createMapcodeService();
 
   // config.dbUrl contains a password — it must never be logged.
@@ -42,7 +44,7 @@ async function main(): Promise<void> {
   });
   const app = buildServer({
     mapcodeService,
-    boundaryService,
+    borders,
     version: config.version,
     logger: { level: "info" },
     // The no-op recorder's close() is harmless, so it's still created

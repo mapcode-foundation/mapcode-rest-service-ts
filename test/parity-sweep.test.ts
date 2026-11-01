@@ -33,7 +33,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import type { FastifyInstance } from "fastify";
 import { buildServer } from "../src/server.ts";
 import { createMapcodeService } from "../src/domain/mapcode-service.ts";
-import { BoundaryService } from "../src/domain/boundary-service.ts";
+import { loadTestBorders } from "./borders-fixture.ts";
 import { Alphabet, encodeToInternational, decode } from "mapcode-ts";
 import { distanceInMeters } from "../src/domain/geo.ts";
 
@@ -41,10 +41,10 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   const mapcodeService = createMapcodeService();
-  const boundaryService = await BoundaryService.load("test/resources/borders-test.fgb");
+  const borders = await loadTestBorders();
   app = buildServer({
     mapcodeService,
-    boundaryService,
+    borders,
     version: "1.0",
     recorder: { record: () => {}, flush: async () => {}, close: async () => {} },
   });

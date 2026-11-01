@@ -17,7 +17,8 @@ import { fileURLToPath } from "node:url";
 
 export interface Config {
   port: number;
-  bordersPath: string;
+  /** Path to a mapcode-ts-borders .mcb file; null → use the data bundled with mapcode-ts-borders. */
+  bordersPath: string | null;
   version: string;
   /** Postgres connection string; null → recording disabled, no replay route. */
   dbUrl: string | null;
@@ -104,10 +105,7 @@ export function loadEnvFileIfExists(path = ".env", env: NodeJS.ProcessEnv = proc
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const bordersPath = (env.MAPCODE_BORDERS_PATH ?? "").trim();
-  if (!bordersPath) {
-    throw new Error("MAPCODE_BORDERS_PATH is required (path to the borders.fgb file).");
-  }
+  const bordersPath = (env.MAPCODE_BORDERS_PATH ?? "").trim() || null;
   const port = parsePort(env.PORT?.trim());
   const version = (env.VERSION ?? "").trim() || packageVersion();
   const dbUrl = (env.MAPCODE_DB_URL ?? "").trim() || null;

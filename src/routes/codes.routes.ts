@@ -33,7 +33,7 @@ function splitLatLon(latlon: string): { latStr: string; lonStr: string } | null 
 }
 
 export function registerCodesRoutes(app: FastifyInstance, deps: ServerDeps): void {
-  const { mapcodeService, boundaryService } = deps;
+  const { mapcodeService, borders } = deps;
 
   // -------------------------------------------------------------------------
   // GET /mapcode/codes (no lat/lon) — forbidden (403).
@@ -70,7 +70,7 @@ export function registerCodesRoutes(app: FastifyInstance, deps: ServerDeps): voi
         include: getQueryParam(query, "include") ?? "",
       },
       mapcodeService,
-      boundaryService
+      borders
     );
     // Coordinate source: bit-identical to the encoder's own normalization.
     request.recording = { kind: KIND.codes, latDeg: Number(ll.latStr), lonDeg: mapToLon(Number(ll.lonStr)) };
@@ -94,7 +94,7 @@ export function registerCodesRoutes(app: FastifyInstance, deps: ServerDeps): voi
     if (ll === null) {
       throw new ApiNotFoundError(`Route not found: ${request.method} ${request.url}`);
     }
-    const { dto, schema } = handleTerritoriesForLatLon(ll.latStr, ll.lonStr, boundaryService);
+    const { dto, schema } = handleTerritoriesForLatLon(ll.latStr, ll.lonStr, borders);
     request.recording = { kind: KIND.codesTerritories, latDeg: Number(ll.latStr), lonDeg: mapToLon(Number(ll.lonStr)) };
     return respond(reply, format, dto, schema);
   };
@@ -134,7 +134,7 @@ export function registerCodesRoutes(app: FastifyInstance, deps: ServerDeps): voi
         include: getQueryParam(query, "include") ?? "",
       },
       mapcodeService,
-      boundaryService
+      borders
     );
     request.recording = {
       kind: type === "local" ? KIND.codesLocal : type === "international" ? KIND.codesInternational : KIND.codesMapcodes,

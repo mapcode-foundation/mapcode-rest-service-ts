@@ -15,7 +15,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { buildServer } from "../src/server.ts";
 import { createMapcodeService } from "../src/domain/mapcode-service.ts";
-import { BoundaryService } from "../src/domain/boundary-service.ts";
+import { loadTestBorders } from "./borders-fixture.ts";
 import type { FastifyInstance } from "fastify";
 
 // Test constants (ported from ApiCoordsTest.java)
@@ -27,8 +27,8 @@ let app: FastifyInstance;
 
 beforeAll(async () => {
   const mapcodeService = createMapcodeService();
-  const boundaryService = await BoundaryService.load("test/resources/borders-test.fgb");
-  app = buildServer({ mapcodeService, boundaryService, version: "1.0" });
+  const borders = await loadTestBorders();
+  app = buildServer({ mapcodeService, borders, version: "1.0" });
   await app.ready();
 });
 
