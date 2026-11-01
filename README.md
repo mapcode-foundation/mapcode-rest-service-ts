@@ -39,9 +39,8 @@ administrative boundaries (point-in-polygon + ranking). The lookup is done by
 [`mapcode-ts-borders`](https://www.npmjs.com/package/mapcode-ts-borders), which
 ships the border data as a `borders.mcb` file (OpenStreetMap, May 2026). The
 service loads it fully into memory on startup and logs its source, for example
-`borders: OpenStreetMap 2026-05`.
-
-The service always uses this bundled data, and logs its snapshot at startup.
+`borders: OpenStreetMap 2026-05`. New border data comes with a new
+`mapcode-ts-borders` release.
 
 A small fixture used by the test suite lives at `test/resources/borders-test.mcb`.
 `test/resources/README.md` explains how to regenerate it.
