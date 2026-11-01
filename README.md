@@ -41,17 +41,7 @@ ships the border data as a `borders.mcb` file (OpenStreetMap, May 2026). The
 service loads it fully into memory on startup and logs its source, for example
 `borders: OpenStreetMap 2026-05`.
 
-Nothing needs configuring. To use your own data, point the
-**`MAPCODE_BORDERS_PATH`** environment variable at a `.mcb` file built with the
-converter of `mapcode-ts-borders`:
-
-```bash
-MAPCODE_BORDERS_PATH=/data/my-borders.mcb
-```
-
-The service refuses to start when that file is unreadable or is not a
-`mapcode-ts-borders` `.mcb` file. In particular, an old deployment that points
-`MAPCODE_BORDERS_PATH` at a `.fgb` file must unset it.
+The service always uses this bundled data, and logs its snapshot at startup.
 
 A small fixture used by the test suite lives at `test/resources/borders-test.mcb`.
 `test/resources/README.md` explains how to regenerate it.
@@ -62,7 +52,6 @@ Configuration is read from environment variables (via `src/config.ts`):
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `MAPCODE_BORDERS_PATH` | _(unset)_ | Optional path to a `mapcode-ts-borders` `.mcb` file. When unset, the data bundled with `mapcode-ts-borders` is used. |
 | `PORT` | `8080` | TCP port to listen on. |
 | `VERSION` | `package.json` version | Version string returned by `/mapcode/version`. |
 | `MAPCODE_DB_URL` | _(unset)_ | Optional Postgres connection string. When unset, request recording is disabled and `/mapcode/replay` is not registered. Contains credentials — never logged. **Do not put `sslmode` in the URL** (see TLS note below). |
@@ -338,11 +327,11 @@ Apache-2.0.
 * Border lookups now come from `mapcode-ts-borders` 1.0.0, which bundles the
   OpenStreetMap data of May 2026. The responses stay the same for production
   data.
-* `MAPCODE_BORDERS_PATH` is optional. Unset, the service uses the bundled data.
-  Set, it must point at a `mapcode-ts-borders` `.mcb` file.
+* The service always uses the data bundled with `mapcode-ts-borders`.
+  `MAPCODE_BORDERS_PATH` is no longer used and is ignored when set, so it can
+  be removed from deployments.
 * The FlatGeobuf files are removed, together with the `flatgeobuf` and
-  `flatbush` dependencies. A deployment that sets `MAPCODE_BORDERS_PATH` to a
-  `.fgb` file must unset it, or the service refuses to start.
+  `flatbush` dependencies.
 * The startup log names the border data source.
 
 ### 2.11.4

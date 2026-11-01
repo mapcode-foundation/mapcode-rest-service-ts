@@ -35,11 +35,10 @@ afterEach(() => {
 });
 
 describe("loadConfig", () => {
-  it("parses port, bordersPath and version", () => {
-    const cfg = loadConfig({ PORT: "9090", MAPCODE_BORDERS_PATH: "/x/b.mcb", VERSION: "1.0" });
+  it("parses port and version", () => {
+    const cfg = loadConfig({ PORT: "9090", VERSION: "1.0" });
     expect(cfg).toEqual({
       port: 9090,
-      bordersPath: "/x/b.mcb",
       version: "1.0",
       dbUrl: null,
       replayToken: null,
@@ -48,28 +47,29 @@ describe("loadConfig", () => {
   });
 
   it("defaults port to 8080 and version to a non-empty string", () => {
-    const cfg = loadConfig({ MAPCODE_BORDERS_PATH: "/x/b.mcb" });
+    const cfg = loadConfig({});
     expect(cfg.port).toBe(8080);
     expect(cfg.version.length).toBeGreaterThan(0);
   });
 
-  it("leaves bordersPath null when MAPCODE_BORDERS_PATH is unset or blank (bundled data)", () => {
-    expect(loadConfig({}).bordersPath).toBeNull();
-    expect(loadConfig({ MAPCODE_BORDERS_PATH: "  " }).bordersPath).toBeNull();
+  it("ignores a stale MAPCODE_BORDERS_PATH", () => {
+    const cfg = loadConfig({ MAPCODE_BORDERS_PATH: "./data/borders.fgb" });
+    expect(cfg).not.toHaveProperty("bordersPath");
+    expect(Object.keys(cfg).sort()).toEqual(["dbCaCert", "dbUrl", "port", "replayToken", "version"]);
   });
 
   it("rejects malformed PORT values", () => {
-    expect(() => loadConfig({ PORT: "abc", MAPCODE_BORDERS_PATH: "/x/b.mcb" })).toThrow(/PORT/);
-    expect(() => loadConfig({ PORT: "123abc", MAPCODE_BORDERS_PATH: "/x/b.mcb" })).toThrow(/PORT/);
+    expect(() => loadConfig({ PORT: "abc" })).toThrow(/PORT/);
+    expect(() => loadConfig({ PORT: "123abc" })).toThrow(/PORT/);
   });
 
   it("rejects PORT values outside the listenable range", () => {
-    expect(() => loadConfig({ PORT: "-1", MAPCODE_BORDERS_PATH: "/x/b.mcb" })).toThrow(/PORT/);
-    expect(() => loadConfig({ PORT: "65536", MAPCODE_BORDERS_PATH: "/x/b.mcb" })).toThrow(/PORT/);
+    expect(() => loadConfig({ PORT: "-1" })).toThrow(/PORT/);
+    expect(() => loadConfig({ PORT: "65536" })).toThrow(/PORT/);
   });
 
   it("defaults dbUrl, replayToken and dbCaCert to null", () => {
-    const cfg = loadConfig({ MAPCODE_BORDERS_PATH: "/x/b.mcb" });
+    const cfg = loadConfig({});
     expect(cfg.dbUrl).toBeNull();
     expect(cfg.replayToken).toBeNull();
     expect(cfg.dbCaCert).toBeNull();
@@ -77,7 +77,6 @@ describe("loadConfig", () => {
 
   it("parses MAPCODE_DB_URL, MAPCODE_REPLAY_TOKEN and MAPCODE_DB_CA_CERT", () => {
     const cfg = loadConfig({
-      MAPCODE_BORDERS_PATH: "/x/b.mcb",
       MAPCODE_DB_URL: "postgres://u:p@h:5432/db?sslmode=require",
       MAPCODE_REPLAY_TOKEN: "secret-token",
       MAPCODE_DB_CA_CERT: "-----BEGIN CERTIFICATE-----",
@@ -88,21 +87,20 @@ describe("loadConfig", () => {
   });
 
   it("treats empty/whitespace MAPCODE_DB_URL as absent", () => {
-    const cfg = loadConfig({ MAPCODE_BORDERS_PATH: "/x/b.mcb", MAPCODE_DB_URL: "  " });
+    const cfg = loadConfig({ MAPCODE_DB_URL: "  " });
     expect(cfg.dbUrl).toBeNull();
   });
 
   it("fails closed: MAPCODE_DB_URL without MAPCODE_REPLAY_TOKEN throws", () => {
     expect(() =>
       loadConfig({
-        MAPCODE_BORDERS_PATH: "/x/b.mcb",
-        MAPCODE_DB_URL: "postgres://u:p@h:5432/db",
+          MAPCODE_DB_URL: "postgres://u:p@h:5432/db",
       })
     ).toThrow(/MAPCODE_REPLAY_TOKEN/);
   });
 
   it("accepts MAPCODE_REPLAY_TOKEN without MAPCODE_DB_URL (recording simply disabled)", () => {
-    const cfg = loadConfig({ MAPCODE_BORDERS_PATH: "/x/b.mcb", MAPCODE_REPLAY_TOKEN: "t" });
+    const cfg = loadConfig({ MAPCODE_REPLAY_TOKEN: "t" });
     expect(cfg.dbUrl).toBeNull();
     expect(cfg.replayToken).toBe("t");
   });
@@ -111,21 +109,21 @@ describe("loadConfig", () => {
 describe("loadEnvFileIfExists", () => {
   it("loads values from an existing .env file", () => {
     const env: NodeJS.ProcessEnv = {};
-    const envPath = writeEnvFile("MAPCODE_BORDERS_PATH=/from-file\nPORT=8081\n");
+    const envPath = writeEnvFile("VERSION=from-file\nPORT=8081\n");
 
     expect(loadEnvFileIfExists(envPath, env)).toBe(true);
 
-    expect(env.MAPCODE_BORDERS_PATH).toBe("/from-file");
+    expect(env.VERSION).toBe("from-file");
     expect(env.PORT).toBe("8081");
   });
 
   it("keeps deployment-provided variables ahead of .env file values", () => {
-    const env: NodeJS.ProcessEnv = { MAPCODE_BORDERS_PATH: "/from-deployment", PORT: "0" };
-    const envPath = writeEnvFile("MAPCODE_BORDERS_PATH=/from-file\nPORT=8081\n");
+    const env: NodeJS.ProcessEnv = { VERSION: "from-deployment", PORT: "0" };
+    const envPath = writeEnvFile("VERSION=from-file\nPORT=8081\n");
 
     expect(loadEnvFileIfExists(envPath, env)).toBe(true);
 
-    expect(env.MAPCODE_BORDERS_PATH).toBe("/from-deployment");
+    expect(env.VERSION).toBe("from-deployment");
     expect(env.PORT).toBe("0");
   });
 
