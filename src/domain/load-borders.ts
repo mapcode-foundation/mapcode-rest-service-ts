@@ -28,7 +28,10 @@ export async function loadBorders(bordersPath: string | null): Promise<Borders> 
   try {
     bytes = await readFile(location);
   } catch (e) {
-    throw new Error(`Borders file not readable: ${label}`, { cause: e });
+    const hint = bordersPath === null
+      ? ""
+      : ". Unset MAPCODE_BORDERS_PATH to use the data bundled with mapcode-ts-borders (older setups point it at the removed ./data/borders.fgb)";
+    throw new Error(`Borders file not readable: ${label}${hint}`, { cause: e });
   }
   try {
     return Borders.fromBytes(bytes);

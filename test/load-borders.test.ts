@@ -43,6 +43,10 @@ describe("loadBorders", () => {
     await expect(loadBorders("/no/such/borders.mcb")).rejects.toThrow("Borders file not readable: /no/such/borders.mcb");
   });
 
+  it("tells the operator to unset MAPCODE_BORDERS_PATH when the configured file is missing", async () => {
+    await expect(loadBorders("./data/borders.fgb")).rejects.toThrow("Unset MAPCODE_BORDERS_PATH");
+  });
+
   it("fails fast naming the path and MAPCODE_BORDERS_PATH when the file is not an .mcb file", async () => {
     const dir = mkdtempSync(join(tmpdir(), "borders-"));
     tempDirs.push(dir);
